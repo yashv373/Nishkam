@@ -268,7 +268,7 @@ def main():
     runner = Runner(container, a.host_dir, a.container_dir)
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(runner, token, set(a.origin)))
     print(f"Nishkam runner {VERSION} using container '{container}', jobs in {a.host_dir}")
-    print(f"\n  Open this link to connect:\n  {a.site}/#runner=http://127.0.0.1:{a.port}&token={token}\n")
+    print(f"\n  Open this link to connect:\n  {a.site}/app.html#runner=http://127.0.0.1:{a.port}&token={token}\n")
     print("Keep this window open. Ctrl+C to stop.")
     try:
         srv.serve_forever()

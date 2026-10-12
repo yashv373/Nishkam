@@ -22,7 +22,7 @@ cd web
 python -m http.server 8000
 ```
 
-Open http://localhost:8000. RTL problems work right away. The first Submit downloads Yosys (about 70 MB), and the browser caches it after that.
+Open http://localhost:8000/app.html. RTL problems work right away. The first Submit downloads Yosys (about 70 MB), and the browser caches it after that.
 
 ### Physical design (optional)
 
@@ -45,7 +45,8 @@ One-time setup: in the repo, Settings → Pages → Source: **GitHub Actions**.
 ## Files
 
 ```
-web/index.html         page layout and styles
+web/index.html         landing page
+web/app.html           practice page layout and styles
 web/app.js             page logic
 web/problems.js        the problems and their reference answers
 web/grader.js          how RTL answers are checked (shared with the test)
