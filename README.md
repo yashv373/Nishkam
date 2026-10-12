@@ -51,7 +51,7 @@ web/app.js             page logic
 web/problems.js        the problems and their reference answers
 web/grader.js          how RTL answers are checked (shared with the test)
 web/worker.js          runs Yosys without freezing the page
-web/brand/             logo (traced to SVG), alternate mark, favicon
+web/brand/             monogram, calligraphic wordmark, favicon, sharing image
 web/grader.test.mjs    checks every problem: right answers pass, wrong ones fail
 runner/nishkam_runner.py   the local helper
 ```
