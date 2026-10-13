@@ -44,3 +44,53 @@ export function createConsole({ logEl, msgEl, msgCount, filterEl, timerEl, shell
     },
   };
 }
+
+// Raw logs: tool stdout/stderr exactly as the tool printed it. Headers are UI chrome (CSS ::before, not selectable/copyable).
+// Display keeps the last RAW_CAP lines; downloads keep everything.
+const RAW_CAP = 20000;
+const nl = (s) => { let n = 0; for (let i = s.indexOf("\n"); i >= 0; i = s.indexOf("\n", i + 1)) n++; return n; };
+export function createRawConsole({ el, selectEl, noteEl, onDownload }) {
+  const invs = []; let sel = "", auto = true, dirty = false, lastCall = null;
+  const group = (t) => t.split("/")[0];
+  el.addEventListener("scroll", () => { auto = el.scrollTop + el.clientHeight >= el.scrollHeight - 8; });
+  function options() {
+    const groups = [...new Set(invs.map((i) => group(i.tool)))];
+    if (selectEl.options.length - 1 === groups.length) return;
+    selectEl.replaceChildren(new Option("All tools", ""), ...groups.map((g) => new Option(g, g)));
+    selectEl.value = sel;
+  }
+  function paint() {
+    dirty = false; options();
+    const view = invs.filter((i) => !sel || group(i.tool) === sel);
+    let total = view.reduce((a, i) => a + i.lines, 0), drop = total - RAW_CAP, dropped = 0;
+    const nodes = [];
+    for (const i of view) {
+      let t = i.text;
+      if (drop > 0) { // cut whole lines from the oldest output first
+        if (i.lines <= drop) { drop -= i.lines; dropped += i.lines; continue; }
+        let at = 0; for (let k = 0; k < drop; k++) at = t.indexOf("\n", at) + 1;
+        t = t.slice(at); dropped += drop; drop = 0;
+      }
+      const h = document.createElement("div"); h.className = "rawhdr"; h.dataset.t = `── ${i.tool} (stdout+stderr) ──`;
+      const p = document.createElement("span"); p.textContent = t; nodes.push(h, p);
+    }
+    noteEl.hidden = !dropped; noteEl.textContent = dropped ? `older lines dropped (${dropped}): download for the full log` : "";
+    el.replaceChildren(...nodes);
+    if (auto) el.scrollTop = el.scrollHeight;
+  }
+  const schedule = () => { if (!dirty) { dirty = true; setTimeout(paint, 100); } };
+  selectEl.onchange = () => { sel = selectEl.value; paint(); };
+  return {
+    add(tool, chunk, stream, callId, begin) {
+      let i = invs[invs.length - 1];
+      if (!i || i.tool !== tool || i.call !== callId || begin) { i = { tool, call: callId, text: "", lines: 0 }; invs.push(i); }
+      i.text += chunk; i.lines += nl(chunk); schedule();
+    },
+    clear() { invs.length = 0; sel = ""; selectEl.value = ""; paint(); },
+    // all=true joins every tool with a plain separator line; a single tool is its text byte-for-byte
+    text(tool) { const v = invs.filter((i) => !tool || group(i.tool) === tool); return tool ? v.map((i) => i.text).join("") : v.map((i) => `===== ${i.tool} =====
+${i.text}`).join(""); },
+    get tool() { return sel; },
+    refresh: paint,
+  };
+}

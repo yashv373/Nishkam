@@ -11,17 +11,19 @@ const DONT_USE = ["sdffq", "sdffrnq", "sdffrsnq", "sdffsnq"].flatMap((n) => [1, 
 let mod; // tests set globalThis.__yosysModule to a Node-installed @yowasp/yosys
 const load = () => (mod ||= globalThis.__yosysModule || import(YOSYS_URL));
 
-async function yosys(script, files, { log, progress }) {
+async function yosys(script, files, { log, progress, raw = () => {} }) {
   const { runYosys, Exit } = await load();
   const out = [];
   const sink = (b) => { if (b) { const s = text(b); out.push(s); log(s); } };
   let fs, ok = true;
   try {
-    fs = await runYosys(["-q", "-s", "run.ys"], { ...files, "run.ys": script }, {
+    fs = await runYosys(["-q", "-l", "yosys.log", "-s", "run.ys"], { ...files, "run.ys": script }, {
       stdout: sink, stderr: sink,
       fetchProgress: ({ doneLength, totalLength }) => progress(totalLength ? doneLength / totalLength : 0),
     });
   } catch (e) { if (!(e instanceof Exit)) throw e; ok = false; fs = e.files; }
+  // -q keeps the console to warnings/errors; -l writes Yosys's complete log, which is what the Raw logs tab shows, untouched
+  if (fs?.["yosys.log"] != null) raw("yosys", text(fs["yosys.log"]), "out", true);
   return { ok, fs: fs || {}, log: out.join("") };
 }
 

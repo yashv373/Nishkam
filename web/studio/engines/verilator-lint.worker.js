@@ -12,7 +12,7 @@ export function parseMessages(stderr) {
   return out;
 }
 
-export async function handle({ files, options = {} }, { log, progress }) {
+export async function handle({ files, options = {} }, { log, progress, raw = () => {} }) {
   v ||= await Promise.resolve(globalThis.__verilatorModule || import(VERILATOR_URL)).then((m) => m.createVerilator());
   progress(0.5);
   const srcs = Object.keys(files).filter((p) => /\.s?vh?$/.test(p));
@@ -22,6 +22,7 @@ export async function handle({ files, options = {} }, { log, progress }) {
   }
   const args = ["--lint-only", "-Wall", ...(options.top ? ["--top-module", options.top] : []), ...srcs];
   const r = await v.run({ args, files: { ...files, "/dev/null": "" } }); // --lint-only needs /dev/null in the in-memory fs
+  raw("verilator", (r.stdout || "") + (r.stderr || ""), "out", true);
   log(r.stderr);
   const messages = parseMessages(r.stderr);
   const errors = messages.filter((m) => m.severity === "error").length;

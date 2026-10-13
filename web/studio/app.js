@@ -1,7 +1,8 @@
 // Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
 import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS } from "./stages.js";
 import { renderNavigator } from "./navigator.js";
-import { createConsole } from "./console.js";
+import { createConsole, createRawConsole } from "./console.js";
+import { setRawSink } from "./engines/_rpc.js";
 import { createProject } from "./files.js";
 import * as R from "./runner-client.js";
 
@@ -85,8 +86,12 @@ const markStale = () => { for (const s of STAGES) if (state[s.id]?.st === "passe
 // ---------- console ----------
 const cons = createConsole({ logEl: $("log"), msgEl: $("msgs"), msgCount: $("msgCount"), filterEl: $("filterTxt"), timerEl: $("timer"),
   shellRow: $("shellRow"), onShell: (cmd, out) => R.shell(cmd, out).catch((e) => out("ERROR: " + e.message)) });
+const raw = createRawConsole({ el: $("rawlog"), selectEl: $("rawTool"), noteEl: $("rawNote") });
+setRawSink((tool, chunk, stream, callId, begin) => raw.add(tool, chunk, stream, callId, begin));
+$("rawDl").onclick = () => { const t = raw.tool, u = URL.createObjectURL(new Blob([raw.text(t)], { type: "text/plain" }));
+  const l = Object.assign(document.createElement("a"), { href: u, download: (t || "all-tools") + ".raw.log.txt" }); l.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); };
 $("filterTxt").onclick = () => cons.setFilter("");
-$("clearLog").onclick = () => cons.clear();
+$("clearLog").onclick = () => { cons.clear(); raw.clear(); };
 $("shellRow").onsubmit = (e) => { e.preventDefault(); const v = $("shellIn").value.trim(); if (v) { $("shellIn").value = ""; cons.shellSubmit(v); } };
 document.querySelectorAll("#dockTabs [data-d]").forEach((b) => b.onclick = () => {
   document.querySelectorAll("#dockTabs [data-d]").forEach((x) => x.classList.toggle("on", x === b));
@@ -369,7 +374,7 @@ async function runnerJob({ from, to, ids }) {
     await new Promise((r) => setTimeout(r, 1500));
     if (abort?.signal.aborted) throw new Error("stopped (the runner keeps the job going in the container)");
     try {
-      const c = await R.logChunk(jobId, off); off = c.next; if (c.text) cons.log(ids[0], c.text);
+      const c = await R.logChunk(jobId, off); off = c.next; if (c.text) { cons.log(ids[0], c.text); raw.add("librelane", c.text, "out", jobId); }
       s = await R.jobStatus(jobId); misses = 0;
     } catch (e) { if (++misses < 5) continue; throw new Error("runner disconnected: " + e.message); }
     // steps do not map to stages in order (resizer steps recur), so only ever move forward

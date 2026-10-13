@@ -27,14 +27,14 @@ export function parse(out) {
   return { match, devices: d ? [+d[1], +d[2]] : null, nets: n ? [+n[1], +n[2]] : null, result: f || (match ? "Circuits match uniquely." : "no result") };
 }
 
-export async function handle({ files, options = {} }, { log, progress }) {
+export async function handle({ files, options = {} }, { log, progress, raw = () => {} }) {
   const sp = Object.keys(files).find((p) => /\.spice$/.test(p)), vf = Object.keys(files).find((p) => /\.v$/.test(p));
   if (!sp || !vf) throw new Error("need the extracted .spice (Magic) and the gate netlist .v");
   const top = options.top || sp.replace(/^.*\//, "").replace(/\.spice$/, "");
   const [cellBin, setup] = await Promise.all([pdk("spice"), readBin(new URL("gf180mcuD_setup.tcl", NG))]);
   const p = prepare(dec(files[sp]), dec(files[vf]), cellBin, options);
   const out = [];
-  const say = (s) => { out.push(s); };
+  const say = (s) => { out.push(s); raw("netgen", s + "\n"); };
   const mod = await (await import(new URL("netgen.js", NG).href)).default({ print: say, printErr: say });
   const W = (n, d) => mod.FS.writeFile("/w/" + n, d);
   mod.FS.mkdirTree("/w");

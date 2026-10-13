@@ -1,6 +1,10 @@
 // Shared by every engine: run a request in a lazy-started module Web Worker.
 // Worker protocol: post {id, ...req}; worker replies {id, log}, {id, progress}, {id, result} or {id, error}.
 const workers = new Map();
+// Raw tool output (stdout/stderr exactly as a tool printed it): workers call raw(tool, chunk, stream, newInvocation);
+// the page installs one sink with setRawSink((tool, chunk, stream, callId, newInvocation) => ...).
+let rawSink = null;
+export const setRawSink = (f) => { rawSink = f; };
 
 export function call(workerUrl, req, { onLog, onProgress, signal, timeoutMs } = {}) {
   let w = workers.get(workerUrl.href);
@@ -14,7 +18,8 @@ export function call(workerUrl, req, { onLog, onProgress, signal, timeoutMs } = 
     };
     const on = ({ data }) => {
       if (data.id !== id) return;
-      if (data.log !== undefined) onLog?.(data.log);
+      if (data.raw) rawSink?.(data.raw.tool, data.raw.chunk, data.raw.stream, id, data.raw.begin);
+      else if (data.log !== undefined) onLog?.(data.log);
       else if (data.progress !== undefined) onProgress?.(data.progress);
       else { done(); data.error ? reject(new Error(data.error)) : resolve(data.result); }
     };
@@ -27,7 +32,7 @@ export function call(workerUrl, req, { onLog, onProgress, signal, timeoutMs } = 
   });
 }
 
-// Worker side: wire a pure handler(req, {log, progress}) to messages. Inactive under Node.
+// Worker side: wire a pure handler(req, {log, progress, raw}) to messages. Inactive under Node.
 export function serve(handler) {
   if (typeof WorkerGlobalScope === "undefined" || !(self instanceof WorkerGlobalScope)) return;
   self.onmessage = async ({ data: { id, ...req } }) => {
@@ -35,6 +40,7 @@ export function serve(handler) {
       const result = await handler(req, {
         log: (log) => self.postMessage({ id, log }),
         progress: (progress) => self.postMessage({ id, progress }),
+        raw: (tool, chunk, stream = "out", begin = false) => self.postMessage({ id, raw: { tool, chunk, stream, begin } }),
       });
       self.postMessage({ id, result });
     } catch (e) { self.postMessage({ id, error: String((e && e.message) || e) }); }

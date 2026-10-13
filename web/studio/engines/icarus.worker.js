@@ -19,14 +19,14 @@ flag:DLL=vvp.tgt
 `;
 
 // options.generation: "2005" | "2009" | "2012" (default 2012); files: every .v/.sv incl. the testbench
-export async function handle({ files, options = {} }, { log, progress }) {
+export async function handle({ files, options = {} }, { log, progress, raw = () => {} }) {
   const names = Object.keys(files).filter((p) => /\.s?vh?$/.test(p));
   if (!names.length) throw new Error("no .v/.sv files given");
   const real = (t) => t.replace(/\/f(\d+)\.v/g, (m, i) => names[i] ?? m); // /f1.v -> the user's file name
   const clean = (e) => real(e.filter((l) => !NOISE.test(l)).join("\n"));
 
   const pp = [];
-  const m1 = await initIvlpp({ print: (s) => pp.push(s), printErr: () => {} });
+  const m1 = await initIvlpp({ print: (s) => pp.push(s), printErr: (s) => raw("icarus/ivlpp", s + "\n", "err") });
   const args = ["-L"]; // -L keeps `line directives so ivl errors name the right file
   names.forEach((n, i) => {
     const s = text(files[n]);
@@ -40,7 +40,7 @@ export async function handle({ files, options = {} }, { log, progress }) {
   const limit = options.maxSimTime ?? 1e6;
   pp.push(`module __nishkam_limit; initial begin #${limit}; $display("__NISHKAM_SIMLIMIT__"); $finish; end endmodule`);
   const err = [];
-  const m2 = await initIvl({ print: () => {}, printErr: (s) => err.push(s) });
+  const m2 = await initIvl({ print: (s) => raw("icarus/ivl", s + "\n", "out"), printErr: (s) => { err.push(s); raw("icarus/ivl", s + "\n", "err"); } });
   m2.FS.writeFile("/ivl.conf", conf(options.generation || "2012"));
   m2.FS.writeFile("/src.v", pp.join("\n") + "\n");
   m2.callMain(["-C/ivl.conf", "--", "/src.v"]);
@@ -54,7 +54,7 @@ export async function handle({ files, options = {} }, { log, progress }) {
   const out = [];
   let hitLimit = false;
   const emit = (s) => { s = real(s); if (s.includes("__NISHKAM_SIMLIMIT__")) hitLimit = true; else { out.push(s); log(s + "\n"); } };
-  const m3 = await initVvp({ print: emit, printErr: emit });
+  const m3 = await initVvp({ print: (s) => { raw("icarus/vvp", s + "\n", "out"); emit(s); }, printErr: (s) => { raw("icarus/vvp", s + "\n", "err"); emit(s); } });
   m3.FS.writeFile("/sim.vvp", vvp);
   m3.callMain(["-n", "/sim.vvp"]); // -n: $stop acts like $finish (no interactive prompt)
   const outFiles = {};

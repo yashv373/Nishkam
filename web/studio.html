@@ -46,12 +46,17 @@
     <div id="dock">
       <div id="dockTabs">
         <button data-d="Console" class="on">Console</button>
+        <button data-d="Raw">Raw logs</button>
         <button data-d="Messages">Messages <span id="msgCount" class="count">0</span></button>
         <button data-d="Files">Files / Artifacts</button>
         <span class="grow"></span><span id="filterTxt" class="muted"></span><span id="timer" class="muted"></span>
         <button id="clearLog" title="Clear">Clear</button>
       </div>
       <pre id="log" class="dockv" data-d="Console"></pre>
+      <div id="rawv" class="dockv" data-d="Raw" hidden>
+        <div id="rawbar"><select id="rawTool" aria-label="Tool"><option value="">All tools</option></select><button id="rawDl">Download raw log</button><span id="rawNote" class="muted" hidden></span></div>
+        <pre id="rawlog"></pre>
+      </div>
       <div id="msgs" class="dockv" data-d="Messages" hidden></div>
       <div id="arts" class="dockv" data-d="Files" hidden></div>
       <form id="shellRow" hidden><span>$</span><input id="shellIn" placeholder="command in the container (shell enabled on runner)" autocomplete="off"></form>

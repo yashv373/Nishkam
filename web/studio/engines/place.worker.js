@@ -31,13 +31,18 @@ export const pdk = (k) => readBin(new URL(PDK[k], V.pd));
 
 // Run one Emscripten program on a scratch filesystem. Returns {files, status}. opts.hook = async (cmd, mod) => exit code for subprocess calls.
 // opts.async: program uses Asyncify (exit() does not return from callMain), so wait for its "terminated" line.
+let RAW = () => {};   // handle() functions point this at the request's raw(); route.worker.js shares runTool
+export const setRaw = (f) => { RAW = f || (() => {}); };
+const GW = /^(syntax|Mincut|TimberWolf(MC|SC)|genrows)$/;
 export async function runTool(base, name, args, inFiles, log, opts = {}) {
   let mod, done;
   const finished = new Promise((r) => (done = r));
   const out = [];
+  const tag = (GW.test(name) ? "graywolf/" : name === "qrouter" ? "" : "qflow/") + name;
+  RAW(tag, "", "out", true);
   const say = (s) => { out.push(s); if (opts.async && /terminated (normally|abnormally)/.test(s)) done(); };
   const create = (await import(new URL(name + ".js", base).href)).default;
-  mod = await create({ print: say, printErr: say, nishkamSystem: opts.hook && ((c) => opts.hook(c, mod)) });
+  mod = await create({ print: (s) => { RAW(tag, s + "\n", "out"); say(s); }, printErr: (s) => { RAW(tag, s + "\n", "err"); say(s); }, nishkamSystem: opts.hook && ((c) => opts.hook(c, mod)) });
   for (const [k, v] of Object.entries(inFiles)) mod.FS.writeFile("/" + k, v);
   let status = 0;
   try { mod.callMain(args); } catch (e) { if (e?.status !== undefined) status = e.status; else throw e; }
@@ -178,7 +183,8 @@ export function place2def(top, files, fillCell, numLayersReq) {
   return { def: body + "\n", obs: obs.join("\n") + "\n", info: { scale, numlayers, oscale, pitchx, pitchy } };
 }
 
-export async function handle({ files, options = {} }, { log, progress }) {
+export async function handle({ files, options = {} }, { log, progress, raw }) {
+  setRaw(raw);
   const nl = Object.keys(files).find((p) => /\.v$/.test(p));
   if (!nl) throw new Error("no gate-level netlist (.v) given");
   const top = options.top || nl.replace(/^.*\//, "").replace(/(_net)?\.v$/, "");

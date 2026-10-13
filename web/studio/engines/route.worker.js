@@ -1,9 +1,10 @@
 // Detailed routing with qrouter (non-Tcl build, WebAssembly, GPL-2.0, own worker). Replaces qflow's qrouter.sh.
 // Input: <top>.def + <top>.obs from the placement engine. Output: <top>_route.def and failed-net count.
 import { serve, text } from "./_rpc.js";
-import { V, PDK, pdk, runTool } from "./place.worker.js";
+import { V, PDK, pdk, runTool, setRaw } from "./place.worker.js";
 
-export async function handle({ files, options = {} }, { log, progress }) {
+export async function handle({ files, options = {} }, { log, progress, raw = () => {} }) {
+  setRaw(raw);
   const defName = Object.keys(files).find((p) => /\.def$/.test(p));
   if (!defName) throw new Error("no .def given (run placement first)");
   const top = options.top || defName.replace(/^.*\//, "").replace(/\.def$/, "");
