@@ -3,4 +3,4 @@ export const meta = { id: "place", label: "Placement (graywolf)", stage: "place"
 const url = new URL("./place.worker.js", import.meta.url);
 // files: one gate-level netlist "<top>.v" using gf180mcu_fd_sc_mcu7t5v0 cells. options: {top, layers}
 // -> {"<top>.def" placed+filled, "<top>.obs", "<top>.info", ...}. Tested on small designs only (tens of cells).
-export const run = ({ files, options = {}, onLog, onProgress, signal }) => call(url, { files, options }, { onLog, onProgress, signal });
+export const run = ({ files, options = {}, onLog, onProgress, signal }) => call(url, { files, options }, { onLog, onProgress, signal, timeoutMs: (options.timeoutS ?? 120) * 1000 });

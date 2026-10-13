@@ -5,13 +5,12 @@ export const STAGES = [
   { id: "lint", label: "Lint", group: 0, where: "browser", engine: "yosys", pick: "lintEngine", opts: { mode: "lint" }, src: "rtl" },
   { id: "sim", label: "Simulation", group: 1, where: "browser", engine: "icarus", pick: "simEngine", tab: "Waveform", src: "sim" },
   { id: "synth", label: "Synthesis", group: 2, where: "browser", engine: "yosys", opts: { mode: "synth" }, src: "rtl" },
-  // Pre-layout estimate in the browser (ideal clock, no wires). The runner's "Timing (STA)" below is the real post-route one.
-  { id: "presta", label: "Timing & Power (est.)", group: 2, where: "browser", engine: "signoff-lite", tab: "Timing", in: ["netlist.json", "*.vcd"] },
   { id: "schematic", label: "Schematic", group: 2, where: "browser", engine: "netlistsvg", tab: "Schematic", in: ["rtl.json", "netlist.json"] },
   { id: "floorplan", label: "Floorplan", group: 3, where: "runner", tab: "Layout" },
   { id: "place", label: "Placement", group: 3, where: "runner", tab: "Layout" },
   { id: "cts", label: "Clock Tree", group: 3, where: "runner", tab: "Layout" },
   { id: "route", label: "Routing", group: 3, where: "runner", tab: "Layout" },
+  // Browser: shows "needs OpenSTA" until engines/opensta.js exists (switch: OPENSTA_IN_BROWSER in app.js). Runner: real LibreLane/OpenSTA.
   { id: "sta", label: "Timing (STA)", group: 4, where: "runner", tab: "Timing" },
   { id: "signoff", label: "Signoff (DRC/LVS)", group: 4, where: "runner" },
   { id: "reports", label: "Final Reports", group: 5, where: "browser", virtual: true, tab: "Reports" },

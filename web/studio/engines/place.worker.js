@@ -186,6 +186,7 @@ export async function handle({ files, options = {} }, { log, progress }) {
   // TimberWolfSC loops forever on fewer than 6 cells (also natively): pad with unconnected fill cells.
   let netText = text(files[nl]);
   const ncells = (netText.match(/^\s*gf180mcu_\w+\s+\S+\s*\(/gm) || []).length;
+  if (ncells < 2) throw new Error(`Placement needs at least 2 cells (this netlist has ${ncells}); graywolf hangs on a single cell. Add logic, or use the local runner (LibreLane).`);
   const pad = Math.max(0, 6 - ncells);
   if (pad) {
     const i = netText.lastIndexOf("endmodule");

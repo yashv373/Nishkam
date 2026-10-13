@@ -3,7 +3,7 @@ import { plan, batches, runStages } from "./stages.js";
 assert.deepEqual(plan("to", "synth"), ["lint", "sim", "synth"]);
 assert.deepEqual(plan("one", "cts"), ["cts"]);
 assert.deepEqual(plan("one", "files"), []);
-assert.equal(plan("all").length, 11);
+assert.equal(plan("all").length, 10);
 assert.deepEqual(plan("from", "route"), ["route", "sta", "signoff"]);
 assert.deepEqual(batches(["lint", "floorplan", "place", "sta"]).map((b) => b.ids.join("+")), ["lint", "floorplan+place+sta"]);
 const mk = (hasRunner, failId) => {
@@ -37,4 +37,9 @@ console.log("stages2 ok");
   await runStages(["floorplan", "place", "cts", "route", "sta", "signoff"], t.deps);
   assert.deepEqual(seen, ["floorplan", "place", "cts", "route"]);
   assert.deepEqual([t.st.place, t.st.cts, t.st.route, t.st.sta, t.st.signoff], ["passed", "unavailable", "failed", "idle", "idle"]); }
+{ const t = mk(false); t.deps.local = () => true; // sta in browser: unavailable (not failed), later stages still run
+  t.deps.localStage = async (id) => (id === "sta" ? { ok: true, state: "unavailable", info: "needs OpenSTA" } : { ok: true, files: {} });
+  await runStages(["route", "sta", "signoff"], t.deps);
+  assert.deepEqual([t.st.route, t.st.sta, t.st.signoff], ["passed", "unavailable", "passed"]); }
+assert.ok(!plan("all").includes("presta"));
 console.log("stages local ok");

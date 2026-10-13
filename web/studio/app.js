@@ -29,19 +29,18 @@ $("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" 
 
 // ---------- options (Properties panel) ----------
 const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
-  clockPeriod: 40, inDelay: "", outDelay: "", pdEngine: "auto", dieW: 170, dieH: 170, density: 50, congestion: false };
+  clockPeriod: 40, pdEngine: "auto", pdTimeout: 120, dieW: 170, dieH: 170, density: 50, congestion: false };
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
 const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
   { k: "simEngine", label: "Simulation engine", t: "select", o: [["icarus", "Icarus Verilog"], ["verilator", "Verilator (coming soon)", true]], st: ["sim"] },
-  { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "presta", "floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "floorplan", "place", "cts", "route", "sta", "signoff"] },
   { k: "tb", label: "Testbench file", t: "file", st: ["sim"] },
   { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
-  { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "presta", "floorplan", "place", "cts", "sta"] },
-  { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "presta", "floorplan", "cts", "sta"], rn: true },
-  { k: "inDelay", label: "Input delay (ns)", t: "number", ph: "20% of period", st: ["presta", "sta"] },
-  { k: "outDelay", label: "Output delay (ns)", t: "number", ph: "20% of period", st: ["presta", "sta"] },
-  { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser (qflow)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "floorplan", "place", "cts", "sta"] },
+  { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "floorplan", "cts", "sta"], rn: true },
+  { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser: experimental (qflow tools on gf180)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "pdTimeout", label: "Browser step time limit (s)", t: "number", st: ["place", "route", "signoff"] },
   { k: "dieW", label: "Die width (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "dieH", label: "Die height (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "density", label: "Target density (%)", t: "number", st: ["place"], rn: true },
@@ -78,8 +77,6 @@ function filterProps() {
 }
 $("propsToggle").onclick = () => $("props").classList.toggle("closed");
 // Runner knobs: ONLY the runner allowlist (CLOCK_PERIOD, DIE_AREA, PL_TARGET_DENSITY_PCT, SYNTH_STRATEGY, GRT_ALLOW_CONGESTION).
-// LibreLane constrains inputs and outputs at 20% of the clock period unless told otherwise; the estimate does the same.
-const ioDelay = (v) => (v === "" || v == null ? +(0.2 * opts.clockPeriod).toFixed(3) : +v);
 const pdLocal = () => opts.pdEngine === "browser" || (opts.pdEngine !== "runner" && !runnerInfo);
 const knobs = () => ({ CLOCK_PERIOD: opts.clockPeriod, DIE_AREA: [0, 0, opts.dieW, opts.dieH], PL_TARGET_DENSITY_PCT: opts.density,
   SYNTH_STRATEGY: opts.strategy, GRT_ALLOW_CONGESTION: !!opts.congestion });
@@ -161,7 +158,7 @@ async function showTab(t) {
   document.querySelectorAll(".view").forEach((v) => v.hidden = v.dataset.v !== t);
   const el = document.querySelector(`.view[data-v="${t}"]`);
   if (t === "Reports") repWrap(el), repCard();
-  if (t === "Timing" && browserTiming && !ctx.source) { drawBrowserTiming(); return; }
+  if (t === "Timing" && !ctx.source) { emptyCard(el, "No timing yet", NO_STA + ".", false); return; }
   if (["Layout", "GDS", "Timing", "Reports"].includes(t)) {
     if (viewers[t]) return viewers[t].inst.update?.(ctx);
     const host = t === "Reports" ? $("repHost") : el;
@@ -193,27 +190,10 @@ async function loadDemo() {
 const view = (n) => document.querySelector(`.view[data-v="${n}"]`);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const sum = { phys: {} };   // browser results for the Reports card: synth / timing / power
-let wave = null, browserTiming = null;
-const EST = "Pre-layout estimate: ideal clock, no wires. Not signoff.";
-// Timing tab for the browser estimate (the OpenSTA viewer only reads runner reports).
-function drawBrowserTiming() {
-  const el = view("Timing"), t = browserTiming; if (!t) return;
-  el.replaceChildren(); const w = h("div", "repcard"); w.style.cssText = "overflow:auto;height:100%;padding:12px";
-  const f = (v, n = 3) => (v == null ? "n/a" : (+v).toFixed(n));
-  w.append(h("p", "muted", EST + " The Timing (STA) stage gives real numbers after Routing on the local runner."));
-  const chips = h("div", "kv");
-  for (const [k, v] of [["Setup WNS", f(t.setup.wns_ns) + " ns"], ["Setup TNS", f(t.setup.tns_ns) + " ns"], ["Hold WNS", f(t.hold.wns_ns) + " ns"], ["Hold TNS", f(t.hold.tns_ns) + " ns"],
-    ["Fmax", f(t.fmax_mhz, 1) + " MHz"], ["Period", t.options.periodNs + " ns"]]) chips.append(h("span", "", k), h("b", "", v));
-  w.append(chips);
-  for (const kind of ["setup", "hold"]) for (const p of (t.paths[kind] || []).slice(0, 3)) {
-    w.append(h("h4", "", `${kind} path: ${p.startpoint} to ${p.endpoint}   slack ${f(p.slack)} ns`));
-    const tb = h("table"); tb.innerHTML = "<thead><tr><th>Pin</th><th>Cell</th><th>Load pF</th><th>Slew</th><th>Delay</th><th>Arrival</th></tr></thead>";
-    const body = h("tbody");
-    for (const s of p.stages) { const tr = h("tr"); for (const c of [s.pin + " " + s.tr, s.cell, f(s.load, 4), f(s.slew), f(s.delay), f(s.arrival)]) tr.append(h("td", "", c)); body.append(tr); }
-    tb.append(body); w.append(tb);
-  }
-  el.append(w);
-}
+// Timing needs a real STA tool. Nothing in the browser computes timing today (no home-made estimator).
+const NO_STA = "needs OpenSTA: coming to the browser; runs today on the local runner (LibreLane)";
+const OPENSTA_IN_BROWSER = false;   // flip to true once engines/opensta.js (OpenSTA WASM) ships; the sta stage then calls it
+let wave = null;
 
 function physRows() {
   const { place: p, route: r, signoff: g } = sum.phys; if (!p && !r && !g) return null;
@@ -238,13 +218,15 @@ function repCard() {
     else { const t = h("div", "kv"); for (const [k, v] of rows) t.append(h("span", "", k), h("b", "", v)); d.append(t); }
     return d; };
   const f = (v, u = "", n = 2) => (v == null ? "n/a" : (+v).toFixed(n).replace(/\.?0+$/, "") + u);
-  const pf = (v) => (v != null && Math.abs(v) < 1 ? f(v * 1000, " nW") : f(v, " µW")); // gf180 leakage is nW-scale
-  const sy = sum.synth, ti = sum.timing, pw = sum.power;
+  const M = ctx.source === "runner" || ctx.source === "demo" ? ctx.metrics : null;   // only real LibreLane numbers
+  const runnerTiming = () => M && M["timing__setup__ws"] != null && [["Setup worst slack", f(M["timing__setup__ws"], " ns", 3)], ["Setup TNS", f(M["timing__setup__tns"], " ns", 3)], ["Hold worst slack", f(M["timing__hold__ws"], " ns", 3)], ["Hold TNS", f(M["timing__hold__tns"], " ns", 3)]];
+  const runnerPower = () => M && M["power__total"] != null && [["Total", f(M["power__total"] * 1e3, " mW", 4)], ["Leakage", f(M["power__leakage__total"] * 1e6, " µW", 4)], ["Internal", f(M["power__internal__total"] * 1e3, " mW", 4)], ["Switching", f(M["power__switching__total"] * 1e3, " mW", 4)]];
+  const sy = sum.synth;
   c.replaceChildren(
     card("Synthesis report", sy && [["Cells", sy.cells ?? "n/a"], ["Area", f(sy.area, " µm²")], ...(sy.kinds || []).slice(0, 12).map(([k, n]) => [k, n])], "Run Synthesis to see cell count, area and cell kinds."),
-    card("Timing (pre-layout estimate, ideal clock, no wires)", ti && [["Worst setup slack", f(ti.setup_slack_ns, " ns", 3)], ["Worst hold slack", f(ti.hold_slack_ns, " ns", 3)], ["Setup WNS", f(ti.wns_ns, " ns", 3)], ["Setup TNS", f(ti.tns_ns, " ns", 3)], ["Hold WNS", f(ti.hold_wns_ns, " ns", 3)], ["Fmax", f(ti.fmax_mhz, " MHz", 1)], ["Period", f(ti.period_ns, " ns")]], "Run Timing & Power (est.) after Synthesis. The local runner gives real timing after Routing."),
-    card("Physical (in-browser, qflow). " + NOT_LL, physRows(), "Run Placement, Routing and Signoff with no runner connected (or pick Physical engine: In browser)."),
-    card("Power (pre-layout estimate, no wires)", pw && [["Total", pf(pw.total_uW)], ["Leakage", pf(pw.leakage_uW)], ["Internal", pf(pw.internal_uW)], ["Switching", pf(pw.switching_uW)]], "Browser power is coming."));
+    card("Timing (OpenSTA via LibreLane)", runnerTiming(), NO_STA + "."),
+    card("Physical (in browser, experimental). " + NOT_LL, physRows(), "Run Placement, Routing and Signoff with no runner connected (or pick Physical engine: In browser)."),
+    card("Power (via LibreLane)", runnerPower(), NO_STA + "."));
 }
 
 // Schematic: SVG in an <img>, wheel zoom + drag pan by CSS transform.
@@ -290,12 +272,6 @@ async function onResult(id, r) {
     showTab(id === "signoff" ? "GDS" : "Layout");
   }
   if (id === "synth" && r.ok) sum.synth = sm;
-  if (id === "presta" && r.ok) {
-    sum.timing = { wns_ns: sm.setup.wns_ns, tns_ns: sm.setup.tns_ns, fmax_mhz: sm.fmax_mhz, hold_wns_ns: sm.hold.wns_ns, setup_slack_ns: sm.setup.worst_slack_ns, hold_slack_ns: sm.hold.worst_slack_ns, hold_tns_ns: sm.hold.tns_ns, period_ns: sm.period_ns, est: true };
-    sum.power = sm.power;
-    try { browserTiming = JSON.parse(outputs["timing.json"]); } catch {}
-    drawBrowserTiming(); showTab("Timing");
-  }
   repCard();
   if (id === "schematic") {
     const svg = Object.entries(r.files || {}).find(([p]) => p.endsWith(".svg"));
@@ -312,7 +288,6 @@ async function onResult(id, r) {
 
 // Engine loader: one file per engine id. The schematic gets a size guard and the RTL/gate-level pick.
 async function loadEngine(s) {
-  if (s.id === "presta") return { run: staRun };
   const m = await import(`./engines/${engineId(s, opts)}.js`);
   if (s.id !== "schematic") return m;
   return { run: (a) => {
@@ -321,37 +296,36 @@ async function loadEngine(s) {
     if (n > MAX_SCHEMATIC_CELLS) return { ok: true, files: {}, summary: { tooLarge: n } };
     return m.run({ ...a, files: { [file]: a.files[file] }, options: { ...a.options, file } }); } };
 }
-// signoff-lite.js does not pass IO delays, so call the STA worker directly.
-async function staRun({ files, options, onLog, onProgress, signal }) {
-  const { call } = await import("./engines/_rpc.js");
-  return call(new URL("./engines/sta.worker.js", import.meta.url), { mode: "both", files,
-    options: { clockPort: options.clockPort, periodNs: options.clockPeriod, top: options.top, inputDelayNs: ioDelay(options.inDelay), outputDelayNs: ioDelay(options.outDelay) } }, { onLog, onProgress, signal });
-}
 // ---------- in-browser physical design (qflow-style: graywolf + qrouter + Magic), used when no runner is connected ----------
 const PD = {};   // raw engine files between stages: place -> route -> magic
-const NOT_LL = "In-browser qflow result, not LibreLane signoff.";
+const NOT_LL = "Experimental: qflow tools (graywolf, qrouter, Magic) on gf180, not LibreLane signoff. The qflow setup shipped in the PDK is outdated (it names cells such as dffq_x1 that do not exist), so Nishkam drives the tools itself.";
+// Cells qrouter cannot reach on gf180 7t (xor2_1 pin A1 unreachable, and4_1 stub short): kept out of synthesis for the browser physical path only.
+const QROUTER_DONT_USE = ["gf180mcu_fd_sc_mcu7t5v0__xor2_1", "gf180mcu_fd_sc_mcu7t5v0__and4_1"];
 const pre = (dir, files) => Object.fromEntries(Object.entries(files).map(([n, d]) => [`browser/${dir}/${n}`, d]));
+// qrouter names nets like the DEF: user names stay, yosys internals (_12_, $abc...) are called "internal net".
+const routeMsg = (s) => { const nm = (s.failedNames || []).map((n) => (/^[_$]/.test(n) ? "internal net" : n)), shown = [...new Set(nm)].slice(0, 6).join(", ");
+  return `qrouter could not route ${s.failedNets} nets${shown ? " (" + shown + (nm.length > 6 ? ", ..." : "") + ")" : ""}; try a larger die or lower density, or use the local runner (LibreLane).`; };
 async function localStage(id, io) {
   const top = opts.top, need = (v, what) => { if (!v) throw new Error(`Run ${what} first.`); return v; };
   if (id === "floorplan") { io.onLog("Floorplan is part of Placement in the browser flow (the die is sized from the cells). " + NOT_LL); return { ok: true, info: "in placement" }; }
   if (id === "cts") return { ok: true, state: "unavailable", info: "skipped (qflow has no clock tree; runner does real CTS)" };
   if (id === "sta") {
-    const nl = need(outputs["netlist.json"], "Synthesis");
-    io.onLog("Post-route STA is runner-only. Re-running the pre-layout estimate on the netlist (no wires).");
-    const r = await staRun({ files: { "netlist.json": nl }, options: { ...opts }, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
-    await onResult("presta", r); return { ok: r.ok, files: {}, state: "warn", info: "no wires" };
+    if (!OPENSTA_IN_BROWSER) return { ok: true, state: "unavailable", info: NO_STA };
+    const m = await import("./engines/opensta.js");   // hook: same engine shape as the others
+    return m.run({ files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, clockPort: opts.clockPort, periodNs: opts.clockPeriod }, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
   }
   const eng = { place: "place", route: "route", signoff: "magic" }[id];
   const m = await import(`./engines/${eng}.js`);
   const a = { onLog: io.onLog, onProgress: io.onProgress, signal: io.signal };
   let r;
-  if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top } });
-  else if (id === "route") r = await m.run({ ...a, files: need(PD.place, "Placement"), options: { top } });
-  else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true } });
+  if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
+  else if (id === "route") r = await m.run({ ...a, files: need(PD.place, "Placement"), options: { top, timeoutS: opts.pdTimeout } });
+  else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true, timeoutS: opts.pdTimeout } });
+  if (id === "route" && !r.ok && r.summary?.failedNets > 0) r.summary.error = routeMsg(r.summary);
   const sm = r.summary || {};
   if (id === "signoff" && r.ok) {   // LVS: Magic layout SPICE vs the Yosys gate netlist. A mismatch is a warning, not a crash.
     try {
-      const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top } });
+      const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
       sm.lvs = l.summary; Object.assign(r.files, l.files);
     } catch (e) { sm.lvs = { error: e.message }; io.onLog("WARNING: LVS did not run: " + e.message); }
   }
@@ -421,7 +395,7 @@ async function start(ids) {
   $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
   syncFromEditor(); cons.startTimer();
   const res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
-    options: () => ({ ...opts, knobs: knobs() }), setState, onLog: (id, l) => cons.log(id, l),
+    options: () => ({ ...opts, knobs: knobs(), ...(pdLocal() ? { dontUse: QROUTER_DONT_USE } : {}) }), setState, onLog: (id, l) => cons.log(id, l),
     onProgress: (id, f) => { frac = f; setProgress(); }, onResult,
     engine: loadEngine, runnerJob, local: pdLocal, localStage });
   running = false; abort = null; frac = 0; applyFx(); cons.stopTimer();

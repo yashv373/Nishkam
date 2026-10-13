@@ -31,11 +31,6 @@ const sim = await step("simulation (icarus)", checks.sim, () => icarus.run({ fil
 const syn = await step("synthesis (yosys)", checks.synth, () => yosys.run({ files: rtl, options: { top: "counter" }, ...o }));
 if (syn) say(`      cells=${syn.summary.cells} area=${syn.summary.area} um2`);
 if (syn) await step("schematic (netlistsvg)", checks.schematic, () => netlistsvg.run({ files: { "rtl.json": syn.files["rtl.json"] }, ...o }));
-if (syn?.ok) { // timing + power: compare with OpenSTA numbers in selftest.node.mjs
-  const sta = await step("timing (sta-lite)", (r) => r.ok && r.summary.setup.worst_slack_ns > 0, () => import("./sta.js").then((m) => m.run({ files: { "netlist.json": syn.files["netlist.json"] }, options: { top: "counter", clockPort: "clk", periodNs: 10 }, ...o })));
-  if (sta) say(`      setup slack=${sta.summary.setup.worst_slack_ns.toFixed(3)} ns, fmax=${sta.summary.fmax_mhz.toFixed(0)} MHz`);
-  await step("power (estimate)", (r) => r.ok && r.summary.power.total_uW > 0, () => import("./power.js").then((m) => m.run({ files: { "netlist.json": syn.files["netlist.json"] }, options: { top: "counter", clockPort: "clk", periodNs: 10 }, ...o })));
-}
 if (sim?.ok) { // waveform is visual: PASS means the iframe loaded, check the picture
   const w = surfer.mount(document.getElementById("wave"));
   await w.load(Object.values(sim.files)[0]);

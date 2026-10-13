@@ -2,12 +2,13 @@
 // Worker protocol: post {id, ...req}; worker replies {id, log}, {id, progress}, {id, result} or {id, error}.
 const workers = new Map();
 
-export function call(workerUrl, req, { onLog, onProgress, signal } = {}) {
+export function call(workerUrl, req, { onLog, onProgress, signal, timeoutMs } = {}) {
   let w = workers.get(workerUrl.href);
   if (!w) { w = new Worker(workerUrl, { type: "module" }); workers.set(workerUrl.href, w); }
   const id = Math.random().toString(36).slice(2);
   return new Promise((resolve, reject) => {
-    const done = () => { w.removeEventListener("message", on); signal?.removeEventListener("abort", abort); };
+    let timer;
+    const done = () => { clearTimeout(timer); w.removeEventListener("message", on); signal?.removeEventListener("abort", abort); };
     const abort = () => { // ponytail: abort kills the worker (and its loaded wasm); next call restarts it
       done(); w.terminate(); workers.delete(workerUrl.href); reject(new DOMException("aborted", "AbortError"));
     };
@@ -17,6 +18,8 @@ export function call(workerUrl, req, { onLog, onProgress, signal } = {}) {
       else if (data.progress !== undefined) onProgress?.(data.progress);
       else { done(); data.error ? reject(new Error(data.error)) : resolve(data.result); }
     };
+    if (timeoutMs > 0) timer = setTimeout(() => { // wall-clock limit: kill the worker, the caller sees a clear error
+      done(); w.terminate(); workers.delete(workerUrl.href); reject(new Error(`timed out after ${Math.round(timeoutMs / 1000)} s (worker stopped). Try a smaller design or raise the time limit in Properties.`)); }, timeoutMs);
     if (signal?.aborted) return abort();
     signal?.addEventListener("abort", abort);
     w.addEventListener("message", on);

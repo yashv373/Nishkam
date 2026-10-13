@@ -3,4 +3,4 @@ export const meta = { id: "netgen", label: "Netgen (LVS)", stage: "signoff", whe
 const url = new URL("./lvs.worker.js", import.meta.url);
 // files: {"<top>.spice": Magic extraction, "<top>.v": gate netlist}. options: {top, assumeWellTaps: true, flatten: true}
 // -> {"<top>.lvs.txt"}, summary {match, devices:[layout,schematic], nets:[layout,schematic], result}
-export const run = ({ files, options = {}, onLog, onProgress, signal }) => call(url, { files, options }, { onLog, onProgress, signal });
+export const run = ({ files, options = {}, onLog, onProgress, signal }) => call(url, { files, options }, { onLog, onProgress, signal, timeoutMs: (options.timeoutS ?? 120) * 1000 });
