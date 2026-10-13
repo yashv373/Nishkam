@@ -158,6 +158,29 @@ h2 span { color: var(--muted); }
 .die i { aspect-ratio: 1.6; border-radius: 2px; background: rgba(255,255,255,.07); transition: background .6s; }
 .die i.on { background: rgba(74,99,255,.85); box-shadow: 0 0 8px rgba(74,99,255,.7); }
 
+/* flow table */
+.flowt { width: 100%; border-collapse: collapse; margin-top: 28px; font-size: 15px; }
+.flowt th, .flowt td { text-align: left; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.flowt th { font: 500 11.5px/1.4 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.flowt td:first-child { color: #f5f5f7; font-weight: 500; white-space: nowrap; }
+.flowt td:nth-child(2) { color: #aeaeb2; }
+.flowt .w { font-size: 12.5px; color: #4a63ff; white-space: nowrap; }
+.flowt tbody tr { opacity: 0; transform: translateX(-14px); transition: opacity .6s ease, transform .6s ease; }
+.reveal.in .flowt tbody tr { opacity: 1; transform: none; }
+.reveal.in .flowt tbody tr:nth-child(1) { transition-delay: 0.08s; }
+.reveal.in .flowt tbody tr:nth-child(2) { transition-delay: 0.16s; }
+.reveal.in .flowt tbody tr:nth-child(3) { transition-delay: 0.24s; }
+.reveal.in .flowt tbody tr:nth-child(4) { transition-delay: 0.32s; }
+.reveal.in .flowt tbody tr:nth-child(5) { transition-delay: 0.40s; }
+.reveal.in .flowt tbody tr:nth-child(6) { transition-delay: 0.48s; }
+.reveal.in .flowt tbody tr:nth-child(7) { transition-delay: 0.56s; }
+.reveal.in .flowt tbody tr:nth-child(8) { transition-delay: 0.64s; }
+.reveal.in .flowt tbody tr:nth-child(9) { transition-delay: 0.72s; }
+.reveal.in .flowt tbody tr:nth-child(10) { transition-delay: 0.80s; }
+.reveal.in .flowt tbody tr:nth-child(11) { transition-delay: 0.88s; }
+.reveal.in .flowt tbody tr:nth-child(12) { transition-delay: 0.96s; }
+@media (prefers-reduced-motion: reduce) { .flowt tbody tr { opacity: 1; transform: none; transition: none; } }
+@media (max-width: 640px) { .flowt td:nth-child(3), .flowt th:nth-child(3) { display: none; } }
 /* problems */
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 46px; }
 .card { padding: 24px; transition: transform .3s, border-color .3s; display: block; }
@@ -343,6 +366,14 @@ footer a:hover { color: var(--ink); }
   </div>
 </section>
 
+<section id="flow">
+  <div class="wrap reveal">
+    <div class="label">Nishkam Studio · v0.1</div>
+    <h2>The flow, and the tools behind it.</h2>
+    <table class="flowt"><thead><tr><th>Stage</th><th>Tools</th><th>Runs in</th></tr></thead><tbody><tr><td>Lint</td><td>Yosys, Verilator (verilator-wasm)</td><td class="w">Browser</td></tr><tr><td>Simulation</td><td>Icarus Verilog</td><td class="w">Browser</td></tr><tr><td>Waveforms</td><td>Surfer</td><td class="w">Browser</td></tr><tr><td>Synthesis</td><td>Yosys + ABC, gf180mcu 7-track cells</td><td class="w">Browser</td></tr><tr><td>Schematic</td><td>netlistsvg + ELK</td><td class="w">Browser</td></tr><tr><td>Placement</td><td>graywolf (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Clock tree</td><td>OpenROAD TritonCTS via LibreLane</td><td class="w">Runner</td></tr><tr><td>Routing</td><td>qrouter (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Timing</td><td>OpenSTA via LibreLane</td><td class="w">Runner</td></tr><tr><td>DRC · GDS</td><td>Magic · KLayout via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>LVS</td><td>Netgen</td><td class="w">Browser · Runner</td></tr><tr><td>Layout view</td><td>KLayout (kwasm) 2D / 3D</td><td class="w">Browser</td></tr></tbody></table>
+    <p class="label" style="margin-top:18px">All open source. PDK: GlobalFoundries gf180mcuD. Runner = LibreLane on your machine.</p>
+  </div>
+</section>
 <div class="mission reveal">
   <div class="wrap">
     <span class="mark" style="font-size:64px"></span>
