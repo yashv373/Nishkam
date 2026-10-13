@@ -353,8 +353,7 @@ async function localStage(id, io) {
     try {
       const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top } });
       sm.lvs = l.summary; Object.assign(r.files, l.files);
-    } catch (e) { sm.lvs = { error: e.message }; io.onLog("WARNING: LVS did not run: " + e.message + "
-"); }
+    } catch (e) { sm.lvs = { error: e.message }; io.onLog("WARNING: LVS did not run: " + e.message); }
   }
   if (r.ok) PD[id === "signoff" ? "magic" : id] = r.files;
   if (id === "signoff") {
