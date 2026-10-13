@@ -14,7 +14,7 @@ Security model (this server runs tools on your machine for a web page):
 - LibreLane config is built here from an allowlist of knobs, never taken verbatim
 - /shell is the one exception: it runs what the page sends, so it is off unless --allow-shell
 """
-import argparse, json, re, secrets, subprocess, sys, threading, time, uuid
+import argparse, json, os, re, secrets, subprocess, sys, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -488,6 +488,9 @@ def main():
     Path(a.host_dir).mkdir(parents=True, exist_ok=True)
     token = secrets.token_urlsafe(24)
     runner = Runner(container, a.host_dir, a.container_dir)
+    # Windows SO_REUSEADDR lets a second process bind the same port silently (a stale runner, or another
+    # local program, would then get the page's requests). Fail loudly instead.
+    ThreadingHTTPServer.allow_reuse_address = os.name != "nt"
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(runner, token, set(a.origin), a.allow_shell))
     print(f"Nishkam runner {VERSION} using container '{container}', jobs in {a.host_dir}")
     if a.allow_shell:
@@ -495,7 +498,8 @@ def main():
         print("!! SHELL IS ON: whoever has the link below can run ANY command in the container.")
         print("!! Do not share the link. Restart without --allow-shell to turn it off.")
         print("!" * 70)
-    print(f"\n  Open this link to connect:\n  {a.site}/app.html#runner=http://127.0.0.1:{a.port}&token={token}\n")
+    frag = f"#runner=http://127.0.0.1:{a.port}&token={token}"
+    print(f"\n  Open one of these links to connect:\n  Studio:   {a.site}/studio.html{frag}\n  Practice: {a.site}/app.html{frag}\n")
     print("Keep this window open. Ctrl+C to stop.")
     try:
         srv.serve_forever()
