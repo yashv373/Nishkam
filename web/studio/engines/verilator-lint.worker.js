@@ -16,6 +16,10 @@ export async function handle({ files, options = {} }, { log, progress }) {
   v ||= await Promise.resolve(globalThis.__verilatorModule || import(VERILATOR_URL)).then((m) => m.createVerilator());
   progress(0.5);
   const srcs = Object.keys(files).filter((p) => /\.s?vh?$/.test(p));
+  if (options.top) { // warn clearly when the chosen top is not in the sources
+    const mods = srcs.flatMap((p) => [...String(files[p]).matchAll(/^\s*module\s+(\w+)/gm)].map((m) => m[1]));
+    if (!mods.includes(options.top)) return { ok: false, files: {}, summary: { errors: 1, warnings: 0, messages: [{ severity: "error", code: "", file: "", line: 0, col: 0, text: `Top module '${options.top}' not found in the sources. Modules found: ${mods.join(", ") || "none"}.` }] } };
+  }
   const args = ["--lint-only", "-Wall", ...(options.top ? ["--top-module", options.top] : []), ...srcs];
   const r = await v.run({ args, files: { ...files, "/dev/null": "" } }); // --lint-only needs /dev/null in the in-memory fs
   log(r.stderr);

@@ -22,7 +22,8 @@ flag:DLL=vvp.tgt
 export async function handle({ files, options = {} }, { log, progress }) {
   const names = Object.keys(files).filter((p) => /\.s?vh?$/.test(p));
   if (!names.length) throw new Error("no .v/.sv files given");
-  const clean = (e) => e.filter((l) => !NOISE.test(l)).join("\n");
+  const real = (t) => t.replace(/\/f(\d+)\.v/g, (m, i) => names[i] ?? m); // /f1.v -> the user's file name
+  const clean = (e) => real(e.filter((l) => !NOISE.test(l)).join("\n"));
 
   const pp = [];
   const m1 = await initIvlpp({ print: (s) => pp.push(s), printErr: () => {} });
@@ -35,6 +36,9 @@ export async function handle({ files, options = {} }, { log, progress }) {
   m1.callMain(args);
   progress(0.3);
 
+  // sim-time cap, appended last so it inherits the testbench's `timescale; stops testbenches that never call $finish
+  const limit = options.maxSimTime ?? 1e6;
+  pp.push(`module __nishkam_limit; initial begin #${limit}; $display("__NISHKAM_SIMLIMIT__"); $finish; end endmodule`);
   const err = [];
   const m2 = await initIvl({ print: () => {}, printErr: (s) => err.push(s) });
   m2.FS.writeFile("/ivl.conf", conf(options.generation || "2012"));
@@ -48,12 +52,15 @@ export async function handle({ files, options = {} }, { log, progress }) {
   progress(0.6);
 
   const out = [];
-  const m3 = await initVvp({ print: (s) => { out.push(s); log(s + "\n"); }, printErr: (s) => { out.push(s); log(s + "\n"); } });
+  let hitLimit = false;
+  const emit = (s) => { s = real(s); if (s.includes("__NISHKAM_SIMLIMIT__")) hitLimit = true; else { out.push(s); log(s + "\n"); } };
+  const m3 = await initVvp({ print: emit, printErr: emit });
   m3.FS.writeFile("/sim.vvp", vvp);
-  m3.callMain(["/sim.vvp"]);
+  m3.callMain(["-n", "/sim.vvp"]); // -n: $stop acts like $finish (no interactive prompt)
   const outFiles = {};
   for (const f of m3.FS.readdir("/")) // whatever $dumpfile named it
     if (/\.vcd$/i.test(f)) outFiles[f] = m3.FS.readFile("/" + f, { encoding: "utf8" });
+  if (hitLimit) return { ok: false, files: outFiles, summary: { stage: "sim", error: `simulation did not finish within ${limit} time units — add $finish to your testbench`, stdout: out.join("\n"), vcd: Object.keys(outFiles)[0] || null } };
   return { ok: true, files: outFiles, summary: { stdout: out.join("\n"), vcd: Object.keys(outFiles)[0] || null, warnings: diag } };
 }
 

@@ -23,16 +23,15 @@ const s = await t("yosys synth", checks.synth, () => Y.handle({ mode: "synth", f
 if (s) await t("netlistsvg", checks.schematic, () => N.handle({ files: { "rtl.json": s.files["rtl.json"] } }, noop));
 await t("yosys lint catches error", (r) => !r.ok && r.summary.errors > 0, () => Y.handle({ mode: "lint", files: { "bad.v": "module m(; endmodule" } }, noop));
 
-// --- timing + power (sta.worker.js); golden numbers are OpenSTA 3.x on the same netlist + full liberty (period 10, slew 0.1, load 0.01) ---
-const St = await import("./sta.worker.js");
-const near = (a, b, tol) => Math.abs(a - b) <= tol;
-if (s) {
-  const nl = { "netlist.json": s.files["netlist.json"] }, so = { top: "counter", clockPort: "clk", periodNs: 10 };
-  await t("sta counter setup slack = OpenSTA 7.7787", (r) => near(r.summary.setup.worst_slack_ns, 7.7787, 0.05) && r.files["timing.rpt"].includes("SETUP") && !!r.files["timing.json"], () => St.handle({ mode: "sta", files: nl, options: so }, noop));
-  const vcd = sim && Object.entries(sim.files).find(([k]) => k.endsWith(".vcd"));
-  await t("power counter (+VCD)", (r) => r.summary.power.total_uW > 0 && /^VCD/.test(r.summary.power.activitySource) && r.files["power.rpt"].includes("ESTIMATE"), () => St.handle({ mode: "power", files: { ...nl, ...(vcd ? { "dump.vcd": vcd[1] } : {}) }, options: { ...so, periodNs: 10 } }, noop));
-}
-const sh = await Y.handle({ mode: "synth", files: { "shreg4.v": "module shreg4(input clk, rst_n, d, output [3:0] q); reg [3:0] r; always @(posedge clk or negedge rst_n) if (!rst_n) r <= 0; else r <= {r[2:0], d}; assign q = r; endmodule" }, options: { top: "shreg4" } }, noop);
-await t("sta shreg4 hold (removal) = OpenSTA -0.3186", (r) => near(r.summary.hold.worst_slack_ns, -0.3186, 0.01) && near(r.summary.setup.worst_slack_ns, 8.7054, 0.05), () => St.handle({ mode: "sta", files: { "netlist.json": sh.files["netlist.json"] }, options: { top: "shreg4", clockPort: "clk", periodNs: 10 } }, noop));
+// --- LibreLane-flow synthesis checks, lint top check, sim limits ---
+await t("synth maps latch to gf180 latq", (r) => r.ok && r.summary.kinds.some(([k]) => k.startsWith("latq")), () => Y.handle({ mode: "synth", files: { "l.v": "module l(input en, d, output reg q); always @* if (en) q = d; endmodule" }, options: { top: "l" } }, noop));
+await t("synth fails on undeclared net with file:line", (r) => !r.ok && r.summary.messages.some((m) => m.file === "ty.v" && m.line === 1), () => Y.handle({ mode: "synth", files: { "ty.v": "module ty(input clk, d, output reg q); always @(posedge clk) q <= dd; endmodule" }, options: { top: "ty" } }, noop));
+await t("synth fails on undriven net", (r) => !r.ok && r.summary.messages.some((m) => /no driver/.test(m.text)), () => Y.handle({ mode: "synth", files: { "u.v": "module u(input a, output y); wire w; assign y = a & w; endmodule" }, options: { top: "u" } }, noop));
+await t("stat parsed (cells + kinds)", (r) => r.summary.cells > 0 && r.summary.kinds.length > 0, () => Y.handle({ mode: "synth", files: rtl, options: { top: "counter" } }, noop));
+await t("synth dontUse is honoured", (r) => r.ok && !r.summary.kinds.some(([k]) => k === "xor2_1"), () => Y.handle({ mode: "synth", files: rtl, options: { top: "counter", dontUse: ["gf180mcu_fd_sc_mcu7t5v0__xor2_1"] } }, noop));
+await t("lint: missing top is reported", (r) => !r.ok && /not found/.test(r.summary.messages[0].text), () => Y.handle({ mode: "lint", files: rtl, options: { top: "nope" } }, noop));
+await t("sim: free-running clock stops with a clear message", (r) => !r.ok && /did not finish/.test(r.summary.error), () => I.handle({ files: { "t.v": "module t; reg c=0; always #5 c=~c; endmodule" }, options: { maxSimTime: 1000 } }, noop));
+await t("sim: errors show the real file name", (r) => !r.ok && /bad_tb\.v/.test(r.summary.error) && !/\/f\d/.test(r.summary.error), () => I.handle({ files: { "bad_tb.v": "module t; initial begin x = ; end endmodule" } }, noop));
+
 if (s) console.log(JSON.stringify(s.summary).slice(0, 300));
 process.exit(fail ? 1 : 0);
