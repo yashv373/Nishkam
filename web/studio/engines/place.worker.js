@@ -216,12 +216,15 @@ export async function handle({ files, options = {} }, { log, progress }) {
   if (!g[`${top}.pl1`]) throw new Error("graywolf produced no placement");
 
   const p = place2def(top, { ".info": info, ".pl1": g[`${top}.pl1`], ".pl2": g[`${top}.pl2`], ".pin": g[`${top}.pin`] }, "gf180mcu_fd_sc_mcu7t5v0__fill_1", layers);
-  const sp = await runTool(V.qf, "addspacers", [...(options.stripes === false ? [] : ["-stripe", "2.5", "50.0", "PG"]), "-p", "VDD,VNW", "-g", "VSS,VPW", "-f", "gf180mcu_fd_sc_mcu7t5v0__fill", "-O",
+  const sp = await runTool(V.qf, "addspacers", [...(options.stripes !== true ? [] : ["-stripe", "2.5", "50.0", "PG"]), "-p", "VDD,VNW", "-g", "VSS,VPW", "-f", "gf180mcu_fd_sc_mcu7t5v0__fill", "-O",
     "-l", PDK.tlef, "-l", PDK.lef, "-o", `${top}_filled.def`, top],
     { [PDK.tlef]: tlef, [PDK.lef]: lef, [`${top}.def`]: p.def, [`${top}.obs`]: p.obs, [`${top}.info`]: info }, L, { quiet: true });
   if (!sp.files[`${top}_filled.def`]) throw new Error("addspacers failed:\n" + sp.out);
+  // Pin pads: addspacers writes 0.28 x 0.28 um squares, below the 0.1444 um^2 minimum metal area (M2.3/M3.3). Make them 0.39 x 0.39 um.
+  const half = Math.round(p.info.oscale * 0.195);
+  const filled = text(sp.files[`${top}_filled.def`]).replace(/(\+ LAYER \S+ )\( -?\d+ -?\d+ \) \( \d+ \d+ \)/g, `$1( -${half} -${half} ) ( ${half} ${half} )`);
   progress(1);
-  const out = { [`${top}.def`]: sp.files[`${top}_filled.def`], [`${top}.obs`]: sp.files[`${top}.obsx`] || p.obs, [`${top}.info`]: info,
+  const out = { [`${top}.def`]: new TextEncoder().encode(filled), [`${top}.obs`]: sp.files[`${top}.obsx`] || p.obs, [`${top}.info`]: info,
     [`${top}.pl1`]: g[`${top}.pl1`], [`${top}.cel`]: g[`${top}.cel`] };
   const comps = (text(out[`${top}.def`]).match(/^COMPONENTS (\d+)/m) || [])[1];
   return { ok: true, files: out, summary: { top, components: +comps, ms: Date.now() - t0, die: (text(out[`${top}.def`]).match(/DIEAREA.*/) || [""])[0] } };
