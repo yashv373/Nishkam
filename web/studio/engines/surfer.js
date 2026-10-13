@@ -18,20 +18,21 @@ export function mount(container) {
   const send = (msg) => frame.contentWindow.inject_message?.(JSON.stringify(msg));
   return {
     frame,
-    // Callers may retry while Surfer's wasm boots; the same VCD keeps the same blob URL, so a retry
-    // never revokes a URL Surfer is still fetching.
+    // Waits for Surfer's wasm (it defines window.inject_message), then loads each VCD exactly once:
+    // callers may call load() repeatedly, and a second LoadUrl would clear the signals already added.
     async load(vcd) {
       await ready;
-      if (vcd !== lastVcd) {
-        if (blob) URL.revokeObjectURL(blob);
-        blob = URL.createObjectURL(new Blob([vcd], { type: "text/plain" }));
-        lastVcd = vcd;
-      }
-      frame.contentWindow.postMessage({ command: "LoadUrl", url: blob }, "*");
-      // Unstable Surfer API (Message::AddScope(ScopeRef, recursive)); harmless if it changes, the user can
-      // still add signals by hand. Sent after a beat so the file has loaded.
+      const w = frame.contentWindow;
+      for (let t = 0; !w.inject_message && t < 150; t++) await new Promise((r) => setTimeout(r, 100));
+      if (vcd === lastVcd) return;
+      if (blob) URL.revokeObjectURL(blob);
+      blob = URL.createObjectURL(new Blob([vcd], { type: "text/plain" }));
+      lastVcd = vcd;
+      w.postMessage({ command: "LoadUrl", url: blob }, "*");
+      // Unstable Surfer API (Message::AddScope(ScopeRef, recursive), ZoomToFit{viewport_idx}); if it changes,
+      // the user can still add signals by hand. Sent after a beat so the file has loaded.
       const top = topScope(vcd);
-      if (top) setTimeout(() => { send({ AddScope: [{ strs: [top], id: "None" }, true] }); send("ZoomToFit"); }, 800);
+      if (top) setTimeout(() => { send({ AddScope: [{ strs: [top], id: "None" }, true] }); send({ ZoomToFit: { viewport_idx: 0 } }); }, 800);
     },
     destroy() { if (blob) URL.revokeObjectURL(blob); frame.remove(); },
   };

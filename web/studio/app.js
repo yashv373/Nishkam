@@ -386,7 +386,8 @@ addEventListener("keydown", (e) => {
 });
 
 // ---------- editor (Monaco, loaded on demand) ----------
-let editor, openFile = project.list()[0];
+// Open the file that defines the top module first (falls back to the first file).
+let editor, openFile = project.list().find((n) => new RegExp(String.raw`\bmodule\s+${opts.top}\b`).test(project.get(n) || "")) || project.list()[0];
 const models = {};
 function drawFileBar() {
   const bar = $("filebar"); bar.replaceChildren();
