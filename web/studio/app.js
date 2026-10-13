@@ -1,0 +1,394 @@
+// Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
+import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS } from "./stages.js";
+import { renderNavigator } from "./navigator.js";
+import { createConsole } from "./console.js";
+import { createProject } from "./files.js";
+import * as R from "./runner-client.js";
+
+const $ = (id) => document.getElementById(id);
+const root = document.documentElement;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const TABS = ["Editor", "Schematic", "Waveform", "Layout", "GDS", "Timing", "Reports"];
+const project = createProject();
+let selected = "files", running = false, abort = null, jobId = null, runnerInfo = null;
+const state = {};            // stage id -> {st, info, t}
+const outputs = {};          // browser engine output files (path -> string|Uint8Array)
+let artifacts = [];          // [{name, get()}]
+
+// ---------- theme + effects ----------
+root.dataset.theme = store.get("studio:theme", matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+let userFx = store.get("studio:fx", "on");
+const applyFx = () => { root.dataset.fx = userFx === "off" || running ? "off" : "on"; $("fx").setAttribute("aria-pressed", userFx === "off"); };
+applyFx();
+$("fx").onclick = () => { userFx = userFx === "off" ? "on" : "off"; store.set("studio:fx", userFx); applyFx(); };
+$("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark"; store.set("studio:theme", root.dataset.theme);
+  window.monaco?.editor.setTheme(root.dataset.theme === "dark" ? "vs-dark" : "vs"); };
+
+// ---------- options (Properties panel) ----------
+const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
+  clockPeriod: 40, dieW: 170, dieH: 170, density: 50, congestion: false };
+const opts = { ...DEF, ...store.get("studio:opts", {}) };
+const FIELDS = [
+  { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
+  { k: "simEngine", label: "Simulation engine", t: "select", o: [["icarus", "Icarus Verilog"], ["verilator", "Verilator (coming soon)", true]], st: ["sim"] },
+  { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "tb", label: "Testbench file", t: "file", st: ["sim"] },
+  { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
+  { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "floorplan", "place", "cts", "sta"] },
+  { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "floorplan", "cts", "sta"], rn: true },
+  { k: "dieW", label: "Die width (um)", t: "number", st: ["floorplan", "place"], rn: true },
+  { k: "dieH", label: "Die height (um)", t: "number", st: ["floorplan", "place"], rn: true },
+  { k: "density", label: "Target density (%)", t: "number", st: ["place"], rn: true },
+  { k: "congestion", label: "Allow routing congestion", t: "check", st: ["route"], rn: true },
+];
+function buildProps() {
+  const b = $("propsBody"); b.replaceChildren();
+  for (const f of FIELDS) {
+    const d = document.createElement("div"); d.className = "fld" + (f.t === "check" ? " chk" : ""); d.dataset.k = f.k;
+    const l = document.createElement("label"); l.textContent = f.label; l.htmlFor = "o_" + f.k;
+    let inp;
+    if (f.t === "select" || f.t === "file") {
+      inp = document.createElement("select");
+      const items = f.t === "file" ? project.list().map((n) => [n, n]) : f.o.map((x) => (Array.isArray(x) ? x : [x, x]));
+      for (const [v, t, dis] of items) { const o = new Option(t, v); o.disabled = !!dis; inp.add(o); }
+      inp.value = opts[f.k];
+      if (f.t === "file" && !project.list().includes(opts[f.k])) inp.value = project.list().find(project.isTb) || "";
+    } else {
+      inp = document.createElement("input"); inp.type = f.t === "check" ? "checkbox" : f.t === "number" ? "number" : "text";
+      if (f.t === "check") inp.checked = opts[f.k]; else inp.value = opts[f.k];
+    }
+    inp.id = "o_" + f.k;
+    inp.onchange = () => { opts[f.k] = f.t === "check" ? inp.checked : f.t === "number" ? +inp.value : inp.value; store.set("studio:opts", opts);
+      if (f.rn) markStale(); };
+    if (f.t === "check") d.append(Object.assign(l, {}), inp), l.prepend(inp); else d.append(l, inp);
+    if (f.rn) { const s = document.createElement("small"); s.textContent = "runner setting"; d.append(s); }
+    b.append(d);
+  }
+  filterProps();
+}
+function filterProps() {
+  const all = selected === "files" || selected === "reports";
+  document.querySelectorAll("#propsBody .fld").forEach((d) => { d.hidden = !all && !FIELDS.find((f) => f.k === d.dataset.k).st.includes(selected); });
+}
+$("propsToggle").onclick = () => $("props").classList.toggle("closed");
+// Runner knobs: ONLY the runner allowlist (CLOCK_PERIOD, DIE_AREA, PL_TARGET_DENSITY_PCT, SYNTH_STRATEGY, GRT_ALLOW_CONGESTION).
+const knobs = () => ({ CLOCK_PERIOD: opts.clockPeriod, DIE_AREA: [0, 0, opts.dieW, opts.dieH], PL_TARGET_DENSITY_PCT: opts.density,
+  SYNTH_STRATEGY: opts.strategy, GRT_ALLOW_CONGESTION: !!opts.congestion });
+const markStale = () => { for (const s of STAGES) if (state[s.id]?.st === "passed" || state[s.id]?.st === "warn") state[s.id].st = "stale"; drawNav(); };
+
+// ---------- console ----------
+const cons = createConsole({ logEl: $("log"), msgEl: $("msgs"), msgCount: $("msgCount"), filterEl: $("filterTxt"), timerEl: $("timer"),
+  shellRow: $("shellRow"), onShell: (cmd, out) => R.shell(cmd, out).catch((e) => out("ERROR: " + e.message)) });
+$("filterTxt").onclick = () => cons.setFilter("");
+$("clearLog").onclick = () => cons.clear();
+$("shellRow").onsubmit = (e) => { e.preventDefault(); const v = $("shellIn").value.trim(); if (v) { $("shellIn").value = ""; cons.shellSubmit(v); } };
+document.querySelectorAll("#dockTabs [data-d]").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("#dockTabs [data-d]").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".dockv").forEach((v) => v.hidden = v.dataset.d !== b.dataset.d);
+  if (b.dataset.d === "Files") drawArts();
+});
+(() => { const dr = $("dragger"), dock = $("dock");   // resizable dock
+  dr.onpointerdown = (e) => { dr.setPointerCapture(e.pointerId);
+    const move = (m) => { dock.style.height = Math.max(80, Math.min(innerHeight - 250, innerHeight - m.clientY)) + "px"; };
+    dr.addEventListener("pointermove", move); dr.addEventListener("pointerup", () => dr.removeEventListener("pointermove", move), { once: true }); }; })();
+function drawArts() {
+  const el = $("arts"); el.replaceChildren();
+  if (!artifacts.length) return void (el.textContent = "No artifacts yet. Run a stage, or load the demo run.");
+  for (const a of artifacts) { const d = document.createElement("div"); d.className = "art"; d.textContent = a.name; d.onclick = async () => {
+    const data = await a.get(); const u = URL.createObjectURL(new Blob([data])); const l = Object.assign(document.createElement("a"), { href: u, download: a.name.split("/").pop() });
+    l.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); }; el.append(d); }
+}
+
+// ---------- navigator ----------
+const menu = (id, x, y) => {
+  document.getElementById("ctx")?.remove();
+  const m = Object.assign(document.createElement("div"), { id: "ctx" }); m.style.left = x + "px"; m.style.top = y + "px";
+  for (const [t, mode] of [["Run this stage", "one"], ["Run up to here", "to"], ["Re-run from here", "from"]]) {
+    const b = document.createElement("button"); b.textContent = t; b.onclick = () => { m.remove(); start(plan(mode, id)); }; m.append(b); }
+  document.body.append(m); setTimeout(() => addEventListener("click", () => m.remove(), { once: true }));
+};
+function drawNav() {
+  renderNavigator($("nav"), state, selected, { select, run: (id) => start(plan("one", id)), menu }, R.hasConn() && !!runnerInfo);
+}
+function select(id) {
+  selected = id; cons.setFilter(id === "files" || id === "reports" ? "" : id); filterProps(); drawNav();
+  const t = byId(id).tab || (id === "files" || id === "lint" || id === "synth" ? "Editor" : null); if (t) showTab(t);
+}
+function setState(id, st, info) {
+  const prev = state[id]?.st;
+  state[id] = { st, info: typeof info === "string" ? info : undefined, t: 0, t0: st === "running" ? Date.now() : 0 };
+  if (st === "running") for (const d of downstream(id)) if (["passed", "warn"].includes(state[d]?.st)) state[d].st = "stale";
+  if (st === "passed" && prev === "running") { cons.log(id, `${byId(id).label} passed.`); }
+  if (st === "unavailable") cons.log(id, `${byId(id).label}: ${info || "needs local runner"}`);
+  drawNav(); setProgress();
+}
+let planned = [], frac = 0;
+function setProgress() {
+  const done = planned.filter((i) => ["passed", "warn", "failed", "unavailable"].includes(state[i]?.st)).length;
+  $("progress").firstElementChild.style.transform = `scaleX(${planned.length ? Math.min(1, (done + frac) / planned.length) : 0})`;
+}
+setInterval(() => { if (!running) return; let ch = false;
+  for (const v of Object.values(state)) if (v.st === "running") { v.t = Math.round((Date.now() - v.t0) / 1000); ch = true; }
+  if (ch) drawNav(); }, 1000);
+
+// ---------- center tabs + viewers ----------
+const viewers = {};   // tab -> {inst}
+let curTab = "Editor";
+const ctx = { metrics: null, source: null, files: [], getFile: async () => { throw new Error("no data"); }, listFiles: async () => ctx.files,
+  openTab: (n) => showTab(n), log: (l) => cons.log("viewer", l) };
+function buildTabs() {
+  $("tabs").replaceChildren(...TABS.map((t) => { const b = document.createElement("button"); b.textContent = t; b.setAttribute("role", "tab");
+    b.onclick = () => showTab(t); b.dataset.t = t; return b; }));
+}
+function emptyCard(el, title, text, demo) {
+  el.replaceChildren(); const c = document.createElement("div"); c.className = "empty";
+  c.innerHTML = "<h3></h3><p></p>"; c.firstChild.textContent = title; c.children[1].textContent = text;
+  if (demo) { const b = document.createElement("button"); b.textContent = "Load demo run"; b.onclick = loadDemo; c.append(b); }
+  el.append(c);
+}
+async function showTab(t) {
+  curTab = t;
+  document.querySelectorAll("#tabs button").forEach((b) => { b.classList.toggle("on", b.dataset.t === t); b.setAttribute("aria-selected", b.dataset.t === t); });
+  document.querySelectorAll(".view").forEach((v) => v.hidden = v.dataset.v !== t);
+  const el = document.querySelector(`.view[data-v="${t}"]`);
+  if (t === "Reports") repWrap(el), repCard();
+  if (["Layout", "GDS", "Timing", "Reports"].includes(t)) {
+    if (viewers[t]) return viewers[t].inst.update?.(ctx);
+    const host = t === "Reports" ? $("repHost") : el;
+    try {
+      const m = await import(`./viewers/${t.toLowerCase()}.js`);
+      host.replaceChildren(); viewers[t] = { inst: await m.mount(host, ctx) };
+    } catch (e) { emptyCard(el, t + " viewer not available yet", "The viewer module is not in this build. " + (ctx.source ? "" : "You can still load the demo data once it ships."), true); }
+  } else if (t === "Schematic" && !el.firstChild) emptyCard(el, "No schematic yet", "Run Synthesis and then Schematic.", false);
+  else if (t === "Waveform" && !el.firstChild) emptyCard(el, "No waveform yet", "Run Simulation. The testbench must write a VCD with $dumpfile.", false);
+  if (t === "Editor") editor?.layout();
+}
+async function loadDemo() {
+  try {
+    const base = "./studio/demo/";
+    ctx.metrics = parseLoose(await (await fetch(base + "final/metrics.json")).text());
+    const fl = await (await fetch(base + "files.json")).json(); ctx.files = Array.isArray(fl) ? fl : fl.files || [];
+    ctx.source = "demo";
+    ctx.getFile = async (p) => { const r = await fetch(base + p); if (!r.ok) throw new Error("missing " + p);
+      return /\.(gds|png|odb|oas|zip)$/i.test(p) ? r.arrayBuffer() : r.text(); };
+    artifacts = ctx.files.map((n) => ({ name: n, get: () => ctx.getFile(n) }));
+    cons.log("viewer", "Loaded demo run (" + ctx.files.length + " files).");
+    for (const v of Object.values(viewers)) v.inst.update?.(ctx);
+    await showTab(["Layout", "GDS", "Timing", "Reports"].includes(curTab) ? curTab : "Reports");
+    if (viewers[curTab]) viewers[curTab].inst.update?.(ctx);
+  } catch (e) { cons.log("viewer", "WARNING: demo data not available: " + e.message); }
+}
+
+// ---------- browser-engine outputs shown in tabs ----------
+const view = (n) => document.querySelector(`.view[data-v="${n}"]`);
+const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const sum = {};   // browser results for the Reports card: synth / timing / power
+let wave = null;
+
+// Reports tab = our summary card on top, the metrics viewer below it.
+function repWrap(el) { if (!$("repHost")) { el.replaceChildren(h("div", "repcard"), Object.assign(h("div", "rephost"), { id: "repHost" })); el.firstChild.id = "repCard"; } }
+function repCard() {
+  const c = $("repCard"); if (!c) return;
+  const card = (title, rows, note) => { const d = h("div", "rcard"); d.append(h("h4", "", title));
+    if (!rows) d.append(h("p", "muted", note));
+    else { const t = h("div", "kv"); for (const [k, v] of rows) t.append(h("span", "", k), h("b", "", v)); d.append(t); }
+    return d; };
+  const f = (v, u = "", n = 2) => (v == null ? "n/a" : (+v).toFixed(n).replace(/\.?0+$/, "") + u);
+  const sy = sum.synth, ti = sum.timing, pw = sum.power;
+  c.replaceChildren(
+    card("Synthesis report", sy && [["Cells", sy.cells ?? "n/a"], ["Area", f(sy.area, " µm²")], ...(sy.kinds || []).slice(0, 12).map(([k, n]) => [k, n])], "Run Synthesis to see cell count, area and cell kinds."),
+    card("Timing", ti && [["WNS", f(ti.wns_ns, " ns", 3)], ["TNS", f(ti.tns_ns, " ns", 3)], ["Fmax", f(ti.fmax_mhz, " MHz", 1)]], "Browser timing is coming. The local runner gives full timing after Routing."),
+    card("Power", pw && [["Total", f(pw.total_uW, " µW")], ["Leakage", f(pw.leakage_uW, " µW")], ["Internal", f(pw.internal_uW, " µW")], ["Switching", f(pw.switching_uW, " µW")]], "Browser power is coming."));
+}
+
+// Schematic: SVG in an <img>, wheel zoom + drag pan by CSS transform.
+function showSchematic(svg) {
+  const el = view("Schematic"); el.replaceChildren();
+  const bar = h("div", "sbar");
+  for (const [k, t] of [["rtl", "RTL (readable)"], ["gate", "Gate level"]]) { const b = h("button", opts.schematic === k ? "on" : "", t);
+    b.onclick = () => { if (running) return; opts.schematic = k; store.set("studio:opts", opts); start(["schematic"]); }; bar.append(b); }
+  const vp = h("div", "svp"), inner = h("div", "sin");
+  inner.append(Object.assign(new Image(), { src: URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })), alt: "Schematic", draggable: false }));
+  vp.append(inner); el.append(bar, vp);
+  let k = 1, x = 0, y = 0; const put = () => { inner.style.transform = `translate(${x}px,${y}px) scale(${k})`; };
+  vp.onwheel = (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(), f = e.deltaY < 0 ? 1.15 : 1 / 1.15, px = e.clientX - r.left, py = e.clientY - r.top;
+    x = px - (px - x) * f; y = py - (py - y) * f; k *= f; put(); };
+  vp.onpointerdown = (e) => { vp.setPointerCapture(e.pointerId); const sx = e.clientX - x, sy = e.clientY - y;
+    const mv = (m) => { x = m.clientX - sx; y = m.clientY - sy; put(); }; vp.addEventListener("pointermove", mv);
+    vp.addEventListener("pointerup", () => vp.removeEventListener("pointermove", mv), { once: true }); };
+}
+
+// Surfer may drop a message sent before its wasm is ready, so send the VCD a few times.
+async function showWave(vcd) {
+  const el = view("Waveform"); wave?.destroy(); el.replaceChildren();
+  try {
+    const w = wave = (await import("./engines/surfer.js")).mount(el); await showTab("Waveform");
+    for (const d of [0, 1500, 4000]) setTimeout(() => { if (w === wave) w.load(vcd).catch(() => {}); }, d);
+  } catch (e) { emptyCard(el, "Waveform viewer not available yet", "VCD saved in Files / Artifacts."); }
+}
+
+async function onResult(id, r) {
+  for (const [p, d] of Object.entries(r.files || {})) { outputs[p] = d; if (!artifacts.some((a) => a.name === p)) artifacts.push({ name: p, get: async () => outputs[p] }); }
+  const sm = r.summary || {};
+  if (id === "synth" && r.ok) sum.synth = sm;
+  if ("wns_ns" in sm) sum.timing = sm;
+  if ("total_uW" in sm) sum.power = sm;
+  repCard();
+  if (id === "schematic") {
+    const svg = Object.entries(r.files || {}).find(([p]) => p.endsWith(".svg"));
+    if (svg) { showSchematic(svg[1]); showTab("Schematic"); }
+    else if (sm.tooLarge) { cons.log(id, `WARNING: ${sm.tooLarge} cells is too many to draw (limit ${MAX_SCHEMATIC_CELLS}). Try the RTL view.`);
+      emptyCard(view("Schematic"), "Too large to draw", `${sm.tooLarge} cells (limit ${MAX_SCHEMATIC_CELLS}). Use the RTL view or a smaller top module.`); showTab("Schematic"); }
+  }
+  if (id === "sim") {
+    const vcd = Object.entries(r.files || {}).find(([p]) => p.endsWith(".vcd"));
+    if (!vcd) return emptyCard(view("Waveform"), "No waveform", "The testbench did not write a VCD. Add $dumpfile and $dumpvars.", false);
+    await showWave(vcd[1]);
+  }
+}
+
+// Engine loader: one file per engine id. The schematic gets a size guard and the RTL/gate-level pick.
+async function loadEngine(s) {
+  const m = await import(`./engines/${engineId(s, opts)}.js`);
+  if (s.id !== "schematic") return m;
+  return { run: (a) => {
+    const file = opts.schematic === "gate" && a.files["netlist.json"] ? "netlist.json" : a.files["rtl.json"] ? "rtl.json" : Object.keys(a.files)[0];
+    const n = countCells(a.files[file]);
+    if (n > MAX_SCHEMATIC_CELLS) return { ok: true, files: {}, summary: { tooLarge: n } };
+    return m.run({ ...a, files: { [file]: a.files[file] }, options: { ...a.options, file } }); } };
+}
+// Which project files a stage reads: no testbenches, except the chosen one for simulation.
+const filesFor = (id) => Object.fromEntries(Object.entries(project.all()).filter(([n]) => !project.isTb(n) || (byId(id).src === "sim" && n === opts.tb)));
+
+// ---------- runner ----------
+async function checkRunner() {
+  if (!R.hasConn()) return setRunner(null);
+  try { setRunner(await R.health()); } catch { setRunner(null); }
+}
+function setRunner(info) {
+  runnerInfo = info;
+  const chip = $("runnerChip"); chip.className = "chip " + (info ? "st-passed" : "st-idle");
+  $("runnerTxt").textContent = info ? "runner: " + (info.container || "on") : "runner off";
+  cons.enableShell(!!(info && (info.shell || info.allow_shell || info.shell_enabled)));
+  drawNav();
+}
+R.loadConn(); checkRunner(); setInterval(checkRunner, 10000);
+$("runnerChip").onclick = () => runnerInfo ? checkRunner() : $("runnerDlg").showModal();
+$("linkCancel").onclick = () => $("runnerDlg").close();
+$("linkOk").onclick = () => { if (R.connectFromLink($("linkIn").value)) { $("runnerDlg").close(); checkRunner(); } else $("linkErr").textContent = "That link has no runner and token. Copy the whole link the runner printed."; };
+
+let lastJob = null;   // finished job id; later stages resume its run folder
+async function runnerJob({ from, to, ids }) {
+  const body = { top: opts.top, clock_port: opts.clockPort, knobs: knobs(), from, to };
+  if (from === "floorplan") body.files = Object.fromEntries(Object.entries(project.all()).filter(([n]) => !project.isTb(n)));
+  else if (lastJob) body.resume = lastJob;
+  else throw new Error("Run Floorplan first: later stages continue from a finished run.");
+  const j = await R.startJob(body);
+  jobId = j.id; let off = 0, misses = 0, s;
+  if (body.resume) { let c; do { c = await R.logChunk(jobId, off); off = c.next; } while (c.text); }   // skip the old log
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 1500));
+    if (abort?.signal.aborted) throw new Error("stopped (the runner keeps the job going in the container)");
+    try {
+      const c = await R.logChunk(jobId, off); off = c.next; if (c.text) cons.log(ids[0], c.text);
+      s = await R.jobStatus(jobId); misses = 0;
+    } catch (e) { if (++misses < 5) continue; throw new Error("runner disconnected: " + e.message); }
+    const cur = stageOf(s.current_step || (s.finished_steps || []).slice(-1)[0]), ci = ids.indexOf(cur);
+    if (ci >= 0 && s.state === "running") ids.forEach((i, k) => { const w = k < ci ? "passed" : k === ci ? "running" : null; if (w && state[i]?.st !== w) setState(i, w); });
+    if (s.state === "done" || s.state === "failed") break;
+  }
+  lastJob = jobId;
+  if (s.state === "done" || s.metrics) {
+    try { ctx.metrics = await R.jobMetrics(jobId); } catch { ctx.metrics = s.metrics || null; }
+    try { ctx.files = await R.jobFiles(jobId); } catch { ctx.files = []; }
+    const id = jobId; ctx.source = "runner"; ctx.getFile = (p) => R.jobFile(id, p, /\.(gds|png|odb|oas|zip)$/i.test(p));
+    artifacts = ctx.files.map((n) => ({ name: n, get: () => ctx.getFile(n) }));
+    for (const v of Object.values(viewers)) v.inst.update?.(ctx);
+  }
+  return { ok: s.state === "done", failed: stageOf(s.current_step) };
+}
+
+// ---------- run control ----------
+async function start(ids) {
+  if (running || !ids.length) return;
+  running = true; abort = new AbortController(); planned = ids; frac = 0; applyFx();
+  $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
+  syncFromEditor(); cons.startTimer();
+  const res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
+    options: () => ({ ...opts, knobs: knobs() }), setState, onLog: (id, l) => cons.log(id, l),
+    onProgress: (id, f) => { frac = f; setProgress(); }, onResult,
+    engine: loadEngine, runnerJob });
+  running = false; abort = null; frac = 0; applyFx(); cons.stopTimer();
+  $("stop").disabled = true; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = false);
+  setProgress(); drawNav();
+  const nav = $("nav").querySelector(".stage.st-passed:last-of-type"); if (res.ok && nav) { nav.classList.add("flash"); setTimeout(() => nav.classList.remove("flash"), 1300); }
+}
+$("runAll").onclick = () => start(plan("all"));
+$("runTo").onclick = () => start(plan("to", selected));
+$("runOne").onclick = () => start(plan("one", selected));
+$("stop").onclick = () => abort?.abort();
+$("projName").value = project.name; $("projName").onchange = (e) => { project.name = e.target.value; };
+
+// ---------- palette ----------
+const CMDS = [["Run All", () => start(plan("all"))], ["Run to selected stage", () => start(plan("to", selected))], ["Run selected stage", () => start(plan("one", selected))],
+  ["Stop", () => abort?.abort()], ["Connect local runner", () => $("runnerDlg").showModal()], ["Load demo run", loadDemo], ["Toggle theme", () => $("theme").click()],
+  ["Toggle low effects", () => $("fx").click()], ["Clear console", () => cons.clear()], ...TABS.map((t) => ["Go to " + t, () => showTab(t)])];
+let palSel = 0;
+function palDraw() {
+  const q = $("palIn").value.toLowerCase(); const list = CMDS.filter(([n]) => n.toLowerCase().includes(q)); palSel = Math.min(palSel, Math.max(0, list.length - 1));
+  $("palList").replaceChildren(...list.map(([n, f], i) => { const d = document.createElement("div"); d.textContent = n; d.className = i === palSel ? "on" : "";
+    d.onclick = () => { palClose(); f(); }; return d; }));
+  return list;
+}
+const palClose = () => { $("palette").hidden = true; };
+const palOpen = () => { $("palette").hidden = false; $("palIn").value = ""; palSel = 0; palDraw(); $("palIn").focus(); };
+$("paletteBtn").onclick = palOpen;
+$("palette").onclick = (e) => { if (e.target === $("palette")) palClose(); };
+$("palIn").oninput = () => { palSel = 0; palDraw(); };
+$("palIn").onkeydown = (e) => { const l = palDraw();
+  if (e.key === "Escape") palClose();
+  else if (e.key === "ArrowDown") { palSel = Math.min(l.length - 1, palSel + 1); palDraw(); e.preventDefault(); }
+  else if (e.key === "ArrowUp") { palSel = Math.max(0, palSel - 1); palDraw(); e.preventDefault(); }
+  else if (e.key === "Enter" && l[palSel]) { palClose(); l[palSel][1](); } };
+addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); palOpen(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); start(plan("all")); }
+});
+
+// ---------- editor (Monaco, loaded on demand) ----------
+let editor, openFile = project.list()[0];
+const models = {};
+function drawFileBar() {
+  const bar = $("filebar"); bar.replaceChildren();
+  for (const n of project.list()) { const b = document.createElement("button"); b.textContent = n; b.className = n === openFile ? "on" : ""; b.onclick = () => openF(n); bar.append(b); }
+  const mk = (t, f, title) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = f; bar.append(b); };
+  mk("+ New", () => { const n = prompt("New file name (.v .sv .vh)"); if (n) try { project.add(n, `module ${n.replace(/\..*/, "")};\nendmodule\n`); openF(n); buildProps(); } catch (e) { alert(e.message); } }, "New file");
+  const up = Object.assign(document.createElement("input"), { type: "file", multiple: true, accept: ".v,.sv,.vh,.svh", hidden: true });
+  up.onchange = async () => { for (const f of up.files) try { project.add(f.name, await f.text()); } catch (e) { project.set(f.name, await f.text()); } up.value = ""; openF(openFile); buildProps(); };
+  mk("Upload", () => up.click(), "Upload files");
+  mk("Rename", () => { const n = prompt("Rename to", openFile); if (n && n !== openFile) try { project.rename(openFile, n); models[openFile]?.dispose(); delete models[openFile]; openF(n); buildProps(); } catch (e) { alert(e.message); } }, "Rename file");
+  mk("Delete", () => { if (project.list().length > 1 && confirm("Delete " + openFile + "?")) { project.remove(openFile); models[openFile]?.dispose(); delete models[openFile]; openF(project.list()[0]); buildProps(); } }, "Delete file");
+  bar.append(up);
+}
+function openF(n) {
+  openFile = n; drawFileBar(); if (!editor) return;
+  models[n] ||= monaco.editor.createModel(project.get(n), "systemverilog");
+  editor.setModel(models[n]);
+}
+function syncFromEditor() { if (editor && models[openFile]) project.set(openFile, models[openFile].getValue()); }
+drawFileBar();
+window.require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs" } });
+window.require(["vs/editor/editor.main"], () => {
+  editor = monaco.editor.create($("editor"), { language: "systemverilog", theme: root.dataset.theme === "dark" ? "vs-dark" : "vs", fontFamily: "JetBrains Mono, monospace",
+    fontSize: 13, minimap: { enabled: false }, automaticLayout: true, scrollBeyondLastLine: false, tabSize: 2 });
+  editor.onDidChangeModelContent(() => syncFromEditor());
+  openF(openFile);
+}, () => cons.log("editor", "WARNING: Monaco could not load (offline?). Files still run."));
+
+// ---------- boot ----------
+buildTabs(); buildProps(); drawNav(); showTab("Editor");
+addEventListener("pagehide", syncFromEditor);
+window.__studio = { start, plan, state, ctx };  // handy in devtools

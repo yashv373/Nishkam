@@ -3,7 +3,7 @@
 <style>:root{--bg:#07080c;--bg-2:#0c0e14;--panel:#0f1117;--line:rgba(255,255,255,.08);--line-hi:rgba(255,255,255,.16);--text:#e8eaf2;--text-2:#9aa0b4;--text-3:#6b7185;--glow:#4a63ff;--brand-soft:rgba(74,99,255,.16);--ok:#3ddc97;--warn:#ffb020;--err:#ff5c6c;--r-sm:6px;--r-md:10px;--r-lg:16px;--fs-xs:11px;--fs-sm:12.5px;--fs-md:13.5px;--fs-lg:16px;--fs-xl:22px;--ring:0 0 0 2px #4a63ff}
 html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,sans-serif}#top{display:flex;gap:8px;padding:8px;height:44px;box-sizing:border-box}#top button{background:var(--bg-2);color:var(--text);border:1px solid var(--line-hi);border-radius:6px;padding:0 14px}
 #host{height:calc(100% - 44px)}</style>
-<div id="top"><button data-v="layout">Layout</button><button data-v="timing">Timing</button><button data-v="reports">Reports</button></div><div id="host"></div>
+<div id="top"><button data-v="layout">Layout</button><button data-v="timing">Timing</button><button data-v="reports">Reports</button><button data-v="gds">GDS</button></div><div id="host"></div>
 <script type="module">
 const base = "../demo/", files = await (await fetch(base + "files.json")).json();
 const metrics = await (await fetch(base + "final/metrics.json")).json();

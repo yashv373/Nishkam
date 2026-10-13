@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nishkam Studio</title>
+<link rel="icon" href="brand/favicon.svg">
+<link rel="stylesheet" href="studio/studio.css">
+<link rel="stylesheet" href="studio/viewers/viewers.css">
+</head>
+<body>
+<header id="top" class="glass">
+  <span class="logotype" role="img" aria-label="Nishkam"></span>
+  <span class="sep"></span>
+  <input id="projName" class="plain" value="project" aria-label="Project name" size="12">
+  <select id="pdk" aria-label="PDK">
+    <option>gf180mcuD</option>
+    <option disabled>sky130A (runner, coming soon)</option>
+    <option disabled>ihp-sg13g2 (runner, coming soon)</option>
+  </select>
+  <span class="grow"></span>
+  <button id="runAll" class="primary" title="Run all (Ctrl+Enter)">Run All <kbd>Ctrl+Enter</kbd></button>
+  <button id="runTo" title="Run up to the selected stage">Run to selected</button>
+  <button id="runOne" title="Run only the selected stage">Run stage</button>
+  <button id="stop" disabled>Stop</button>
+  <button id="runnerChip" class="chip st-idle" title="Local runner"><i class="dot"></i><span id="runnerTxt">runner off</span></button>
+  <button id="fx" title="Turn off blur and animation" aria-pressed="false">Low effects</button>
+  <button id="theme" title="Theme">Theme</button>
+  <button id="paletteBtn" title="Command palette">Ctrl+K</button>
+</header>
+<div id="progress"><i></i></div>
+<main id="main">
+  <nav id="nav" aria-label="Flow Navigator"></nav>
+  <section id="center">
+    <div id="tabs" class="glass" role="tablist"></div>
+    <div id="views">
+      <div class="view" data-v="Editor"><div id="filebar"></div><div id="editor"></div></div>
+      <div class="view" data-v="Schematic" hidden></div>
+      <div class="view" data-v="Waveform" hidden></div>
+      <div class="view" data-v="Layout" hidden></div>
+      <div class="view" data-v="GDS" hidden></div>
+      <div class="view" data-v="Timing" hidden></div>
+      <div class="view" data-v="Reports" hidden></div>
+    </div>
+    <div id="dragger" title="Drag to resize"></div>
+    <div id="dock">
+      <div id="dockTabs">
+        <button data-d="Console" class="on">Console</button>
+        <button data-d="Messages">Messages <span id="msgCount" class="count">0</span></button>
+        <button data-d="Files">Files / Artifacts</button>
+        <span class="grow"></span><span id="filterTxt" class="muted"></span><span id="timer" class="muted"></span>
+        <button id="clearLog" title="Clear">Clear</button>
+      </div>
+      <pre id="log" class="dockv" data-d="Console"></pre>
+      <div id="msgs" class="dockv" data-d="Messages" hidden></div>
+      <div id="arts" class="dockv" data-d="Files" hidden></div>
+      <form id="shellRow" hidden><span>$</span><input id="shellIn" placeholder="command in the container (shell enabled on runner)" autocomplete="off"></form>
+    </div>
+  </section>
+  <aside id="props">
+    <div class="phead"><span>Properties</span><button id="propsToggle" title="Collapse">&#8250;</button></div>
+    <div id="propsBody"></div>
+  </aside>
+</main>
+<dialog id="runnerDlg">
+  <h3>Connect the local runner</h3>
+  <p>Physical design stages run on your machine. Double-click <code>start-runner.bat</code>, then paste the link it prints.</p>
+  <input id="linkIn" placeholder="http://...#runner=...&token=..." autocomplete="off">
+  <p id="linkErr" class="err"></p>
+  <div class="row"><button id="linkOk" class="primary">Connect</button><button id="linkCancel">Close</button></div>
+</dialog>
+<div id="palette" hidden><div class="glass sheet"><input id="palIn" placeholder="Type a command" autocomplete="off"><div id="palList"></div></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+<script type="module" src="studio/app.js"></script>
+</body>
+</html>
