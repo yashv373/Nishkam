@@ -76,7 +76,7 @@ export async function runStages(ids, deps) {
     if (!ok) { mark(b.ids, "idle"); continue; }
     if (b.where === "runner") {
       if (!deps.hasRunner()) { mark(b.ids, "unavailable", "needs local runner"); continue; }
-      mark(b.ids, "running");
+      mark(b.ids.slice(0, 1), "running");   // the page flips the rest as the job's steps arrive
       try {
         const r = await deps.runnerJob({ from: b.ids[0], to: b.ids[b.ids.length - 1], ids: b.ids });
         ok = r.ok;

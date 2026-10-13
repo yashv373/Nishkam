@@ -314,7 +314,7 @@ async function runnerJob({ from, to, ids }) {
   else if (lastJob) body.resume = lastJob;
   else throw new Error("Run Floorplan first: later stages continue from a finished run.");
   const j = await R.startJob(body);
-  jobId = j.id; let off = 0, misses = 0, s;
+  jobId = j.id; let off = 0, misses = 0, s, hi = -1;
   if (body.resume) { let c; do { c = await R.logChunk(jobId, off); off = c.next; } while (c.text); }   // skip the old log
   for (;;) {
     await new Promise((r) => setTimeout(r, 1500));
@@ -323,7 +323,8 @@ async function runnerJob({ from, to, ids }) {
       const c = await R.logChunk(jobId, off); off = c.next; if (c.text) cons.log(ids[0], c.text);
       s = await R.jobStatus(jobId); misses = 0;
     } catch (e) { if (++misses < 5) continue; throw new Error("runner disconnected: " + e.message); }
-    const cur = stageOf(s.current_step || (s.finished_steps || []).slice(-1)[0]), ci = ids.indexOf(cur);
+    // steps do not map to stages in order (resizer steps recur), so only ever move forward
+    hi = Math.max(hi, ids.indexOf(stageOf(s.current_step || (s.finished_steps || []).slice(-1)[0]))); const ci = hi;
     if (ci >= 0 && s.state === "running") ids.forEach((i, k) => { const w = k < ci ? "passed" : k === ci ? "running" : null; if (w && state[i]?.st !== w) setState(i, w); });
     if (s.state === "done" || s.state === "failed") break;
   }

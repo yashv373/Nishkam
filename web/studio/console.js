@@ -11,7 +11,7 @@ export function createConsole({ logEl, msgEl, msgCount, filterEl, timerEl, shell
     logEl.textContent = view.map((l) => l.text).join("\n");
     if (auto) logEl.scrollTop = logEl.scrollHeight;
   }
-  const schedule = () => { if (!dirty) { dirty = true; requestAnimationFrame(paint); } };
+  const schedule = () => { if (!dirty) { dirty = true; setTimeout(paint, 50); } };   // not rAF: it never fires in a background tab, so the log froze };
   function renderMsgs() {
     const e = msgs.filter((m) => m.sev === "err").length, w = msgs.length - e;
     msgCount.textContent = msgs.length ? `${e ? e + "E " : ""}${w ? w + "W" : ""}`.trim() : "0";
