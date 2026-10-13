@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Engine selftest</title>
+<body style="background:#000;color:#ddd;font:14px/1.5 monospace;padding:16px">
+<h3>Studio engines selftest (first run downloads ~80 MB of Yosys)</h3>
+<pre id="out"></pre>
+<div id="wave" style="height:360px;margin-top:12px"></div>
+<script type="module">
+import { files, rtl, checks } from "./selftest-fixtures.js";
+import * as yosys from "./yosys.js";
+import * as verilator from "./verilator-lint.js";
+import * as icarus from "./icarus.js";
+import * as netlistsvg from "./netlistsvg.js";
+import * as surfer from "./surfer.js";
+
+const out = document.getElementById("out");
+const say = (s) => (out.textContent += s + "\n");
+const step = async (name, check, f) => {
+  const t0 = performance.now();
+  try {
+    const r = await f();
+    say(`${check(r) ? "PASS" : "FAIL"}  ${name}  (${((performance.now() - t0) / 1000).toFixed(1)} s)`);
+    return r;
+  } catch (e) { say(`FAIL  ${name}: ${e.message}`); }
+};
+const o = { onLog() {}, onProgress() {} };
+
+await step("lint (yosys)", checks.lint, () => yosys.run({ files: rtl, options: { mode: "lint" }, ...o }));
+await step("lint (verilator)", checks.verilator, () => verilator.run({ files: rtl, ...o }));
+const sim = await step("simulation (icarus)", checks.sim, () => icarus.run({ files, ...o }));
+const syn = await step("synthesis (yosys)", checks.synth, () => yosys.run({ files: rtl, options: { top: "counter" }, ...o }));
+if (syn) say(`      cells=${syn.summary.cells} area=${syn.summary.area} um2`);
+if (syn) await step("schematic (netlistsvg)", checks.schematic, () => netlistsvg.run({ files: { "rtl.json": syn.files["rtl.json"] }, ...o }));
+if (sim?.ok) { // waveform is visual: PASS means the iframe loaded, check the picture
+  const w = surfer.mount(document.getElementById("wave"));
+  await w.load(Object.values(sim.files)[0]);
+  say("INFO  waveform: Surfer mounted below, confirm signals appear (visual check)");
+}
+</script>
+</body>

@@ -1,0 +1,17 @@
+[
+"13-openroad-floorplan/tiny8.def",
+"34-openroad-detailedplacement/tiny8.def",
+"35-openroad-cts/tiny8.def",
+"44-openroad-detailedrouting/tiny8.def",
+"55-openroad-stapostpnr/max_ss_125C_4v50/max.rpt",
+"55-openroad-stapostpnr/max_ss_125C_4v50/min.rpt",
+"55-openroad-stapostpnr/min_ff_n40C_5v50/max.rpt",
+"55-openroad-stapostpnr/min_ff_n40C_5v50/min.rpt",
+"55-openroad-stapostpnr/nom_tt_025C_5v00/max.rpt",
+"55-openroad-stapostpnr/nom_tt_025C_5v00/min.rpt",
+"55-openroad-stapostpnr/summary.rpt",
+"final/def/tiny8.def",
+"final/gds/tiny8.gds",
+"final/metrics.json",
+"final/render/tiny8.png"
+]
