@@ -3,14 +3,14 @@ import { plan, batches, runStages } from "./stages.js";
 assert.deepEqual(plan("to", "synth"), ["lint", "sim", "synth"]);
 assert.deepEqual(plan("one", "cts"), ["cts"]);
 assert.deepEqual(plan("one", "files"), []);
-assert.equal(plan("all").length, 10);
+assert.equal(plan("all").length, 11);
 assert.deepEqual(plan("from", "route"), ["route", "sta", "signoff"]);
 assert.deepEqual(batches(["lint", "floorplan", "place", "sta"]).map((b) => b.ids.join("+")), ["lint", "floorplan+place+sta"]);
 const mk = (hasRunner, failId) => {
   const st = {}, jobs = [];
   return { st, jobs, deps: { hasRunner: () => hasRunner, files: () => ({}), options: () => ({}), onLog() {},
     setState: (id, s) => (st[id] = s),
-    engine: async (s) => { if (s.engine === "netlistsvg") throw new Error("missing"); return { run: async () => ({ ok: s.id !== failId, files: { [s.id]: 1 } }) }; },
+    engine: async (s) => { if (s.engine === "netlistsvg") throw new Error("missing"); return { run: async () => ({ ok: s.id !== failId, files: { [s.id]: 1, ...(s.id === "synth" ? { "netlist.json": 1 } : {}) } }) }; },
     runnerJob: async (j) => (jobs.push(j), { ok: true }) } };
 };
 let t = mk(false); await runStages(plan("all"), t.deps);

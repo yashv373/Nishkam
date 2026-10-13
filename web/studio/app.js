@@ -34,11 +34,11 @@ const opts = { ...DEF, ...store.get("studio:opts", {}) };
 const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
   { k: "simEngine", label: "Simulation engine", t: "select", o: [["icarus", "Icarus Verilog"], ["verilator", "Verilator (coming soon)", true]], st: ["sim"] },
-  { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "presta", "floorplan", "place", "cts", "route", "sta", "signoff"] },
   { k: "tb", label: "Testbench file", t: "file", st: ["sim"] },
   { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
-  { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "floorplan", "place", "cts", "sta"] },
-  { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "floorplan", "cts", "sta"], rn: true },
+  { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "presta", "floorplan", "place", "cts", "sta"] },
+  { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "presta", "floorplan", "cts", "sta"], rn: true },
   { k: "dieW", label: "Die width (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "dieH", label: "Die height (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "density", label: "Target density (%)", t: "number", st: ["place"], rn: true },
@@ -155,6 +155,7 @@ async function showTab(t) {
   document.querySelectorAll(".view").forEach((v) => v.hidden = v.dataset.v !== t);
   const el = document.querySelector(`.view[data-v="${t}"]`);
   if (t === "Reports") repWrap(el), repCard();
+  if (t === "Timing" && browserTiming && !ctx.source) { drawBrowserTiming(); return; }
   if (["Layout", "GDS", "Timing", "Reports"].includes(t)) {
     if (viewers[t]) return viewers[t].inst.update?.(ctx);
     const host = t === "Reports" ? $("repHost") : el;
@@ -186,7 +187,27 @@ async function loadDemo() {
 const view = (n) => document.querySelector(`.view[data-v="${n}"]`);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const sum = {};   // browser results for the Reports card: synth / timing / power
-let wave = null;
+let wave = null, browserTiming = null;
+const EST = "Pre-layout estimate: ideal clock, no wires. Not signoff.";
+// Timing tab for the browser estimate (the OpenSTA viewer only reads runner reports).
+function drawBrowserTiming() {
+  const el = view("Timing"), t = browserTiming; if (!t) return;
+  el.replaceChildren(); const w = h("div", "repcard"); w.style.cssText = "overflow:auto;height:100%;padding:12px";
+  const f = (v, n = 3) => (v == null ? "n/a" : (+v).toFixed(n));
+  w.append(h("p", "muted", EST + " The Timing (STA) stage gives real numbers after Routing on the local runner."));
+  const chips = h("div", "kv");
+  for (const [k, v] of [["Setup WNS", f(t.setup.wns_ns) + " ns"], ["Setup TNS", f(t.setup.tns_ns) + " ns"], ["Hold WNS", f(t.hold.wns_ns) + " ns"], ["Hold TNS", f(t.hold.tns_ns) + " ns"],
+    ["Fmax", f(t.fmax_mhz, 1) + " MHz"], ["Period", t.options.periodNs + " ns"]]) chips.append(h("span", "", k), h("b", "", v));
+  w.append(chips);
+  for (const kind of ["setup", "hold"]) for (const p of (t.paths[kind] || []).slice(0, 3)) {
+    w.append(h("h4", "", `${kind} path: ${p.startpoint} to ${p.endpoint}   slack ${f(p.slack)} ns`));
+    const tb = h("table"); tb.innerHTML = "<thead><tr><th>Pin</th><th>Cell</th><th>Load pF</th><th>Slew</th><th>Delay</th><th>Arrival</th></tr></thead>";
+    const body = h("tbody");
+    for (const s of p.stages) { const tr = h("tr"); for (const c of [s.pin + " " + s.tr, s.cell, f(s.load, 4), f(s.slew), f(s.delay), f(s.arrival)]) tr.append(h("td", "", c)); body.append(tr); }
+    tb.append(body); w.append(tb);
+  }
+  el.append(w);
+}
 
 // Reports tab = our summary card on top, the metrics viewer below it.
 function repWrap(el) { if (!$("repHost")) { el.replaceChildren(h("div", "repcard"), Object.assign(h("div", "rephost"), { id: "repHost" })); el.firstChild.id = "repCard"; } }
@@ -197,11 +218,12 @@ function repCard() {
     else { const t = h("div", "kv"); for (const [k, v] of rows) t.append(h("span", "", k), h("b", "", v)); d.append(t); }
     return d; };
   const f = (v, u = "", n = 2) => (v == null ? "n/a" : (+v).toFixed(n).replace(/\.?0+$/, "") + u);
+  const pf = (v) => (v != null && Math.abs(v) < 1 ? f(v * 1000, " nW") : f(v, " µW")); // gf180 leakage is nW-scale
   const sy = sum.synth, ti = sum.timing, pw = sum.power;
   c.replaceChildren(
     card("Synthesis report", sy && [["Cells", sy.cells ?? "n/a"], ["Area", f(sy.area, " µm²")], ...(sy.kinds || []).slice(0, 12).map(([k, n]) => [k, n])], "Run Synthesis to see cell count, area and cell kinds."),
-    card("Timing", ti && [["WNS", f(ti.wns_ns, " ns", 3)], ["TNS", f(ti.tns_ns, " ns", 3)], ["Fmax", f(ti.fmax_mhz, " MHz", 1)]], "Browser timing is coming. The local runner gives full timing after Routing."),
-    card("Power", pw && [["Total", f(pw.total_uW, " µW")], ["Leakage", f(pw.leakage_uW, " µW")], ["Internal", f(pw.internal_uW, " µW")], ["Switching", f(pw.switching_uW, " µW")]], "Browser power is coming."));
+    card("Timing (pre-layout estimate, ideal clock, no wires)", ti && [["Worst setup slack", f(ti.setup_slack_ns, " ns", 3)], ["Worst hold slack", f(ti.hold_slack_ns, " ns", 3)], ["Setup WNS", f(ti.wns_ns, " ns", 3)], ["Setup TNS", f(ti.tns_ns, " ns", 3)], ["Hold WNS", f(ti.hold_wns_ns, " ns", 3)], ["Fmax", f(ti.fmax_mhz, " MHz", 1)], ["Period", f(ti.period_ns, " ns")]], "Run Timing & Power (est.) after Synthesis. The local runner gives real timing after Routing."),
+    card("Power (pre-layout estimate, no wires)", pw && [["Total", pf(pw.total_uW)], ["Leakage", pf(pw.leakage_uW)], ["Internal", pf(pw.internal_uW)], ["Switching", pf(pw.switching_uW)]], "Browser power is coming."));
 }
 
 // Schematic: SVG in an <img>, wheel zoom + drag pan by CSS transform.
@@ -225,7 +247,8 @@ function showSchematic(svg) {
 async function showWave(vcd) {
   const el = view("Waveform"); wave?.destroy(); el.replaceChildren();
   try {
-    const w = wave = (await import("./engines/surfer.js")).mount(el); await showTab("Waveform");
+    await showTab("Waveform"); el.replaceChildren();   // Surfer must be visible when it starts, or its canvas is 0x0
+    const w = wave = (await import("./engines/surfer.js")).mount(el);
     for (const d of [0, 1500, 4000]) setTimeout(() => { if (w === wave) w.load(vcd).catch(() => {}); }, d);
   } catch (e) { emptyCard(el, "Waveform viewer not available yet", "VCD saved in Files / Artifacts."); }
 }
@@ -234,8 +257,12 @@ async function onResult(id, r) {
   for (const [p, d] of Object.entries(r.files || {})) { outputs[p] = d; if (!artifacts.some((a) => a.name === p)) artifacts.push({ name: p, get: async () => outputs[p] }); }
   const sm = r.summary || {};
   if (id === "synth" && r.ok) sum.synth = sm;
-  if ("wns_ns" in sm) sum.timing = sm;
-  if ("total_uW" in sm) sum.power = sm;
+  if (id === "presta" && r.ok) {
+    sum.timing = { wns_ns: sm.setup.wns_ns, tns_ns: sm.setup.tns_ns, fmax_mhz: sm.fmax_mhz, hold_wns_ns: sm.hold.wns_ns, setup_slack_ns: sm.setup.worst_slack_ns, hold_slack_ns: sm.hold.worst_slack_ns, hold_tns_ns: sm.hold.tns_ns, period_ns: sm.period_ns, est: true };
+    sum.power = sm.power;
+    try { browserTiming = JSON.parse(outputs["timing.json"]); } catch {}
+    drawBrowserTiming(); showTab("Timing");
+  }
   repCard();
   if (id === "schematic") {
     const svg = Object.entries(r.files || {}).find(([p]) => p.endsWith(".svg"));

@@ -5,6 +5,8 @@ export const STAGES = [
   { id: "lint", label: "Lint", group: 0, where: "browser", engine: "yosys", pick: "lintEngine", opts: { mode: "lint" }, src: "rtl" },
   { id: "sim", label: "Simulation", group: 1, where: "browser", engine: "icarus", pick: "simEngine", tab: "Waveform", src: "sim" },
   { id: "synth", label: "Synthesis", group: 2, where: "browser", engine: "yosys", opts: { mode: "synth" }, src: "rtl" },
+  // Pre-layout estimate in the browser (ideal clock, no wires). The runner's "Timing (STA)" below is the real post-route one.
+  { id: "presta", label: "Timing & Power (est.)", group: 2, where: "browser", engine: "signoff-lite", tab: "Timing", in: ["netlist.json", "*.vcd"] },
   { id: "schematic", label: "Schematic", group: 2, where: "browser", engine: "netlistsvg", tab: "Schematic", in: ["rtl.json", "netlist.json"] },
   { id: "floorplan", label: "Floorplan", group: 3, where: "runner", tab: "Layout" },
   { id: "place", label: "Placement", group: 3, where: "runner", tab: "Layout" },
@@ -87,7 +89,7 @@ export async function runStages(ids, deps) {
     let eng;
     try { eng = await deps.engine(byId(id)); }
     catch (e) { mark([id], "unavailable", "engine not available yet"); deps.onLog(id, "WARNING: engine not available yet (" + e.message + ")"); continue; }
-    const st = byId(id), files = st.in ? Object.fromEntries(st.in.filter((f) => f in outputs).map((f) => [f, outputs[f]])) : deps.files(id);
+    const st = byId(id), files = st.in ? Object.fromEntries(Object.keys(outputs).filter((f) => st.in.some((p) => (p[0] === "*" ? f.endsWith(p.slice(1)) : f === p))).map((f) => [f, outputs[f]])) : deps.files(id);
     if (st.in && !Object.keys(files).length) { ok = false; deps.onLog(id, "ERROR: nothing to draw yet. Run Synthesis first."); mark([id], "failed", "run Synthesis first"); continue; }
     try {
       const r = await eng.run({ files, options: { ...deps.options(), ...st.opts, stage: id },

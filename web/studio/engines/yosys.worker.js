@@ -63,7 +63,9 @@ export async function handle({ mode, files, options = {} }, cb) {
     `abc -liberty cells.lib ${du}`,
     "opt_clean -purge",
     "tee -o stat.txt stat -liberty cells.lib",
-    "write_verilog -noattr netlist.v", "write_json netlist.json",
+    "write_verilog -noattr netlist.v",
+    "read_liberty -lib -ignore_miss_dir cells.lib", // blackbox cell defs give the gf180 cells port directions in the json (the schematic needs them)
+    "write_json netlist.json",
   ].join("\n");
   const r = await yosys(script, { ...files, "cells.lib": lib }, cb);
   const messages = parseMessages(r.log);
