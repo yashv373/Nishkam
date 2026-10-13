@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nishkam</title>
-<meta name="description" content="Practice digital chip design in your browser, from RTL to GDS. Free, open-source tools, no install.">
+<meta name="description" content="Free practice problems and a browser IDE for digital chip design, from RTL to GDS, on an open process. No install.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@500;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,500..800;1,6..96,400..600&family=Tiro+Devanagari+Hindi&display=swap">
 <link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#000000">
-<meta property="og:title" content="Nishkam: chip design, set free">
-<meta property="og:description" content="Practice digital IC design in your browser, from RTL to GDS. Free, open-source tools, no install.">
+<meta property="og:title" content="Nishkam: learn chip design by doing it">
+<meta property="og:description" content="Free practice problems and a browser IDE for digital chip design, from RTL to GDS. No install.">
 <meta property="og:image" content="https://yashv373.github.io/Nishkam/brand/og.png">
 <meta property="og:url" content="https://yashv373.github.io/Nishkam/">
 <meta name="twitter:card" content="summary_large_image">
@@ -33,7 +33,6 @@ a { color: inherit; text-decoration: none; }
 /* liquid glass */
 .glass {
   position: relative; background: var(--glass);
-  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
   border: 1px solid var(--glass-edge); border-radius: 22px;
   box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 rgba(255,255,255,.04), 0 20px 60px rgba(0,0,0,.45);
 }
@@ -42,6 +41,13 @@ a { color: inherit; text-decoration: none; }
   background: linear-gradient(135deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 38%, rgba(255,255,255,0) 70%, rgba(255,255,255,.06) 100%);
 }
 
+nav.top, .window, .walk { -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%); }
+.glass::after { /* light that follows the pointer (gradient only, no blur) */
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(260px circle at var(--mx,50%) var(--my,0%), rgba(120,140,255,.28), transparent 70%); }
+.glass:hover::after { opacity: 1; }
+@media (prefers-reduced-transparency: reduce) { .glass, nav.top, .window, .walk { -webkit-backdrop-filter: none; backdrop-filter: none; background: #1c1c1e; } }
+.paused, .paused * { animation-play-state: paused !important; }
 /* brand */
 .mark { display: inline-block; aspect-ratio: 2262 / 1686; height: 1em; background: currentColor;
   -webkit-mask: url(brand/mark.svg) center / contain no-repeat; mask: url(brand/mark.svg) center / contain no-repeat; }
@@ -81,6 +87,7 @@ nav.top .sp { flex: 1; }
 .hero { position: relative; padding: 190px 0 60px; text-align: center; }
 .hero h1 { font-size: clamp(48px, 8.4vw, 112px); line-height: .98; letter-spacing: -.045em; font-weight: 600; margin: 18px 0 26px; }
 .hero h1 span { color: var(--muted); }
+.hero h1 .hl { background: linear-gradient(90deg,#fff,#7f9cff 60%,#4a63ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero p.sub { font-size: clamp(17px, 2vw, 21px); color: #c7c7cc; max-width: 640px; margin: 0 auto 36px; }
 .hero .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
@@ -181,6 +188,27 @@ h2 span { color: var(--muted); }
 .reveal.in .flowt tbody tr:nth-child(12) { transition-delay: 0.96s; }
 @media (prefers-reduced-motion: reduce) { .flowt tbody tr { opacity: 1; transform: none; transition: none; } }
 @media (max-width: 640px) { .flowt td:nth-child(3), .flowt th:nth-child(3) { display: none; } }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 46px; }
+.two > a { padding: 34px; display: block; transition: transform .3s, border-color .3s; }
+.two > a:hover { transform: translateY(-4px); border-color: rgba(255,255,255,.3); }
+.two h3 { font-size: 28px; letter-spacing: -.02em; margin: 10px 0; font-weight: 600; }
+.two p { color: #aeaeb2; margin: 0 0 18px; }
+.more { color: var(--brand-hi); font-size: 15px; }
+.walk { max-width: 1040px; margin: 50px auto 0; padding: 18px; }
+.walk .tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.walk .tabs button { font: 500 14px var(--sans); color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer; transition: color .3s, background .3s; }
+.walk .tabs button.on { color: #fff; background: rgba(74,99,255,.28); border-color: rgba(120,140,255,.5); }
+.walk .stage { display: grid; }
+.walk figure { grid-area: 1/1; margin: 0; opacity: 0; transform: scale(.985); transition: opacity .7s ease, transform .7s ease; pointer-events: none; }
+.walk figure.on { opacity: 1; transform: none; pointer-events: auto; }
+.walk img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+.walk figcaption { color: #aeaeb2; font-size: 14px; margin: 12px 4px 4px; }
+.walk .bar { height: 2px; background: var(--line); margin-top: 12px; border-radius: 2px; overflow: hidden; }
+.walk .bar i { display: block; height: 100%; background: var(--brand-hi); transform-origin: left; transform: scaleX(0); }
+.walk.run .bar i { animation: fill 6s linear forwards; }
+@keyframes fill { to { transform: scaleX(1); } }
+@media (max-width: 900px) { .two { grid-template-columns: 1fr; } .two > a { padding: 26px; } }
 /* problems */
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 46px; }
 .card { padding: 24px; transition: transform .3s, border-color .3s; display: block; }
@@ -226,6 +254,7 @@ footer a:hover { color: var(--ink); }
   .wordmark { padding-top: 70px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .walk .bar { display: none; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .reveal { opacity: 1; transform: none; }
   .reveal .draw path, .reveal .draw polyline { stroke-dashoffset: 0; }
@@ -254,8 +283,8 @@ footer a:hover { color: var(--ink); }
   <div class="wrap" style="position:relative">
     <div class="reveal hero-mark"><span class="mark"></span></div>
     <div class="label reveal">Digital IC design practice</div>
-    <h1 class="reveal">Chip design,<br><span>set free.</span></h1>
-    <p class="sub reveal">Write RTL in your browser. Get it checked against a reference, cycle by cycle. Then take it all the way to GDS in Studio: simulate, synthesize, place, route, DRC and LVS on a real open-source process. No install. No ₹5 lakh course.</p>
+    <h1 class="reveal">Learn chip design<br><span class="hl">by doing it.</span></h1>
+    <p class="sub reveal">Nishkam is free practice for digital chip designers. Solve problems in your browser, and use Studio, a free editor for the whole path from RTL to a finished layout (GDS), on the open gf180 process. Nothing to install.</p>
     <div class="ctas reveal">
       <a class="btn white" href="app.html">Start practicing →</a>
       <a class="btn glass" href="studio.html">Open Studio · RTL to GDS</a>
@@ -269,7 +298,7 @@ footer a:hover { color: var(--ink); }
           <span class="pill">Easy</span>
           <h4>Up-counter with enable</h4>
           <p>Build a 4-bit up-counter. Synchronous active-high reset. Count when <code>en=1</code>, wrap from 15 to 0, hold otherwise.</p>
-          <p style="color:var(--dim)">Graded against a reference for every input sequence, 20 cycles deep.</p>
+          <p style="color:var(--dim)">Checked against a reference for every input sequence, 20 cycles deep.</p>
         </div>
         <div>
           <div class="code" id="code"></div>
@@ -280,11 +309,42 @@ footer a:hover { color: var(--ink); }
   </div>
 </header>
 
+<section id="what" style="padding-bottom:40px">
+  <div class="wrap">
+    <div class="reveal" style="text-align:center">
+      <div class="label">What is Nishkam</div>
+      <h2>Two things,<br><span>both free.</span></h2>
+    </div>
+    <div class="two">
+      <a class="glass reveal" href="app.html"><div class="label">Practice</div><h3>Problems to solve</h3><p>Write Verilog, press submit, and see right away whether it matches the reference. If not, you see the exact cycle where it differs.</p><span class="more">Start practicing →</span></a>
+      <a class="glass reveal" href="studio.html"><div class="label">Studio · v0.1</div><h3>A chip IDE in your browser</h3><p>Edit, simulate, synthesize and view your design as a schematic and a layout. For full place-and-route, connect a small helper on your own computer.</p><span class="more">Open Studio →</span></a>
+    </div>
+  </div>
+</section>
+
+<section id="see" style="padding-top:60px">
+  <div class="wrap">
+    <div class="reveal" style="text-align:center">
+      <div class="label">See it</div>
+      <h2>From code to layout.<br><span>This is the real thing.</span></h2>
+      <p class="lead" style="margin:0 auto">Screenshots of Studio, and a layout it produced for the tiny8 problem.</p>
+    </div>
+    <div class="walk glass reveal" id="walk">
+      <div class="tabs"><button class="on" data-i="0">1 · Write RTL</button><button data-i="1">2 · Harden to layout</button></div>
+      <div class="stage">
+        <figure class="on"><img src="brand/shots/studio-editor.jpg" width="1499" height="812" loading="lazy" alt="Nishkam Studio editor with a small Verilog shift register"><figcaption>Studio editor: a design, its testbench, and one button to run the whole flow.</figcaption></figure>
+        <figure><img src="brand/shots/tiny8-layout.jpg" width="720" height="720" loading="lazy" alt="Layout of the tiny8 8-bit CPU on gf180mcuD" style="max-height:560px;width:auto;margin:0 auto"><figcaption>Layout of tiny8, a small 8-bit CPU, after placement and routing on gf180mcuD.</figcaption></figure>
+      </div>
+      <div class="bar"><i></i></div>
+    </div>
+  </div>
+</section>
+
 <section id="how">
   <div class="wrap">
     <div class="panel reveal">
       <div class="label">How it works</div>
-      <h2>Three steps.<br><span>The same ones you'd do at work.</span></h2>
+      <h2>Three simple steps.<br><span>The same ones used in real chip work.</span></h2>
       <div class="steps">
         <div class="step">
           <svg class="draw" viewBox="0 0 300 130" aria-hidden="true">
@@ -293,7 +353,7 @@ footer a:hover { color: var(--ink); }
           </svg>
           <div class="label">01 · Write</div>
           <h3>Real problems</h3>
-          <p>Verilog in a proper editor. Problems written by chip designers, on the things interviews and tape-outs actually test.</p>
+          <p>Write Verilog in a code editor. The problems are written by working chip designers.</p>
         </div>
         <div class="step">
           <svg class="draw" viewBox="0 0 300 130" aria-hidden="true">
@@ -303,7 +363,7 @@ footer a:hover { color: var(--ink); }
           </svg>
           <div class="label">02 · Prove</div>
           <h3>Checked, not sampled</h3>
-          <p>No hand-picked test vectors. A solver tries every input sequence for 20 cycles. If you're wrong, you see the exact cycle.</p>
+          <p>A solver tries every possible input for 20 cycles, so there are no hidden test cases. If something differs, you see the exact cycle.</p>
         </div>
         <div class="step">
           <svg class="draw" viewBox="0 0 300 130" aria-hidden="true">
@@ -314,7 +374,7 @@ footer a:hover { color: var(--ink); }
           </svg>
           <div class="label">03 · Harden</div>
           <h3>Take it to silicon</h3>
-          <p>Send a solved design through synthesis, placement, routing and signoff with LibreLane on gf180mcuD, on your own machine.</p>
+          <p>Turn a working design into a real layout: synthesis, placement, routing and checks, using open tools.</p>
         </div>
       </div>
     </div>
@@ -343,13 +403,13 @@ footer a:hover { color: var(--ink); }
   <div class="wrap">
     <div class="reveal" style="text-align:center">
       <div class="label">Silicon</div>
-      <h2>Real tools.<br><span>In your browser, or your machine.</span></h2>
-      <p class="lead" style="margin:0 auto">Studio runs Yosys, Icarus, Magic, Netgen and qflow place-and-route right in the browser as WebAssembly. For full LibreLane signoff, a small helper on your computer runs the real flow and sends the results back to the page. Your files never touch our servers.</p>
+      <h2>What runs where.<br><span>Browser first, your computer if you want more.</span></h2>
+      <p class="lead" style="margin:0 auto">Most of Studio runs inside your browser tab, with nothing to install. For the full LibreLane flow, you can optionally start a small helper on your own computer. It runs the tools and sends results back to the page. Your files stay on your machine.</p>
     </div>
     <div class="flow reveal">
       <div class="glass node"><div class="label">Browser</div><h5>Nishkam</h5><p>Your RTL, the problem, the results.</p></div>
       <div class="link"></div>
-      <div class="glass node"><div class="label">127.0.0.1</div><h5>Local helper</h5><p>Takes only this page, only with your secret token.</p></div>
+      <div class="glass node"><div class="label">127.0.0.1</div><h5>Local helper (optional)</h5><p>Listens only on your computer, and only accepts this page with your private token.</p></div>
       <div class="link"></div>
       <div class="glass node"><div class="label">Docker</div><h5>LibreLane · gf180mcuD</h5><p>Yosys, OpenROAD, Magic, KLayout.</p><div class="die" id="die"></div></div>
     </div>
@@ -360,7 +420,7 @@ footer a:hover { color: var(--ink); }
   <div class="wrap">
     <div class="reveal">
       <div class="label">Problems</div>
-      <h2>Start anywhere.<br><span>Counters to die area.</span></h2>
+      <h2>Start anywhere.<br><span>From counters to chip area.</span></h2>
     </div>
     <div class="grid" id="probs"></div>
   </div>
@@ -369,7 +429,7 @@ footer a:hover { color: var(--ink); }
 <section id="flow">
   <div class="wrap reveal">
     <div class="label">Nishkam Studio · v0.1</div>
-    <h2>The flow, and the tools behind it.</h2>
+    <h2>The flow, step by step.</h2>
     <table class="flowt"><thead><tr><th>Stage</th><th>Tools</th><th>Runs in</th></tr></thead><tbody><tr><td>Lint</td><td>Yosys, Verilator (verilator-wasm)</td><td class="w">Browser</td></tr><tr><td>Simulation</td><td>Icarus Verilog</td><td class="w">Browser</td></tr><tr><td>Waveforms</td><td>Surfer</td><td class="w">Browser</td></tr><tr><td>Synthesis</td><td>Yosys + ABC, gf180mcu 7-track cells</td><td class="w">Browser</td></tr><tr><td>Schematic</td><td>netlistsvg + ELK</td><td class="w">Browser</td></tr><tr><td>Placement</td><td>graywolf (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Clock tree</td><td>OpenROAD TritonCTS via LibreLane</td><td class="w">Runner</td></tr><tr><td>Routing</td><td>qrouter (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Timing</td><td>OpenSTA via LibreLane</td><td class="w">Runner</td></tr><tr><td>DRC · GDS</td><td>Magic · KLayout via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>LVS</td><td>Netgen</td><td class="w">Browser · Runner</td></tr><tr><td>Layout view</td><td>KLayout (kwasm) 2D / 3D</td><td class="w">Browser</td></tr></tbody></table>
     <p class="label" style="margin-top:18px">All open source. PDK: GlobalFoundries gf180mcuD. Runner = LibreLane on your machine.</p>
   </div>
@@ -379,7 +439,7 @@ footer a:hover { color: var(--ink); }
     <span class="mark" style="font-size:64px"></span>
     <div class="label">Why</div>
     <h2>Invincible is<br><em>just a word.</em></h2>
-    <p><span class="deva">निष्काम</span> (nishkām): doing the work fully, without craving the reward. Nishkam is free practice for people who want the skill, not the certificate.</p>
+    <p><span class="deva">निष्काम</span> (nishkām): doing the work fully, without craving the reward. Nishkam is free, open practice for anyone who wants to learn the craft of chip design.</p>
   </div>
 </div>
 
@@ -408,6 +468,10 @@ const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting &
   { threshold: 0.15 });
 document.querySelectorAll(":not(.hero *).reveal").forEach((el) => io.observe(el));
 
+let flowVis = false, heroVis = true;
+const watch = (el, f) => new IntersectionObserver((es) => f(es[0].isIntersecting)).observe(el);
+watch(document.querySelector(".flow"), (v) => (flowVis = v));
+watch(document.querySelector(".hero"), (v) => { heroVis = v; document.querySelector(".lights").classList.toggle("paused", !v); });
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // die: cells light up like placement
@@ -415,7 +479,7 @@ const die = document.getElementById("die");
 die.innerHTML = "<i></i>".repeat(96);
 const cells = [...die.children];
 if (still) cells.forEach((c, i) => i % 3 || c.classList.add("on"));
-else setInterval(() => cells[Math.random() * cells.length | 0].classList.toggle("on"), 140);
+else setInterval(() => { if (flowVis) cells[Math.random() * cells.length | 0].classList.toggle("on"); }, 140);
 
 // product window: type a buggy counter, get caught, fix it, get accepted
 const hl = (s) => esc(s)
@@ -440,6 +504,7 @@ const OK = `<b>Accepted</b>Matches the reference for every input sequence up to 
 async function loop() {
   if (still) { code.innerHTML = hl(FIXED); return say("ok", OK); }
   for (;;) {
+    while (!heroVis) await sleep(300);
     verdict.className = "verdict";
     for (let i = 0; i <= BUGGY.length; i += 2) { show(BUGGY, i); await sleep(18); }
     await sleep(700); say("bad", BAD); await sleep(3200);
@@ -450,6 +515,22 @@ async function loop() {
   }
 }
 loop();
+
+// glass: light follows the pointer
+document.addEventListener("pointermove", (e) => { const g = e.target.closest && e.target.closest(".glass"); if (!g) return; const r = g.getBoundingClientRect(); g.style.setProperty("--mx", e.clientX - r.left + "px"); g.style.setProperty("--my", e.clientY - r.top + "px"); });
+
+// walkthrough: tabs, auto-advance only while on screen
+const walk = document.getElementById("walk"), tabs = [...walk.querySelectorAll("button")], figs = [...walk.querySelectorAll("figure")];
+let cur = 0, wvis = false;
+const go = (i) => { cur = i; tabs.forEach((t, k) => t.classList.toggle("on", k === i)); figs.forEach((f, k) => f.classList.toggle("on", k === i));
+  walk.classList.remove("run"); void walk.offsetWidth; if (wvis && !still) walk.classList.add("run"); };
+tabs.forEach((t, i) => t.addEventListener("click", () => go(i)));
+walk.querySelector(".bar i").addEventListener("animationend", () => go((cur + 1) % figs.length));
+watch(walk, (v) => { wvis = v; go(cur); });
+
+// parallax: glows drift slower than the page (transform only)
+if (!still) { const lights = document.querySelector(".lights"); let tick = false;
+  addEventListener("scroll", () => { if (tick || !heroVis) return; tick = true; requestAnimationFrame(() => { lights.style.transform = `translateY(${scrollY * 0.25}px)`; tick = false; }); }, { passive: true }); }
 </script>
 </body>
 </html>
