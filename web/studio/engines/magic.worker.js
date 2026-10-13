@@ -28,7 +28,7 @@ export async function handle({ files, options = {} }, { log, progress }) {
   const summary = { top, gdsBytes: res[`${top}.gds`].length };
   if (options.drc !== false) {
     const mark = out.length;
-    for (const c of ["select top cell", "drc on", "drc check", "drc catchup", "drc count total", "echo end-of-drc", "drc listall why"]) cmd(c);
+    for (const c of ["select top cell", "drc euclidean on", "drc style drc(full)", "drc on", "drc check", "drc catchup", "drc count total", "echo end-of-drc", "drc listall why"]) cmd(c);
     const o = out.slice(mark);
     if (options.debug) log("RAW:" + JSON.stringify(o).slice(0, 900) + "\n");
     const n = o.join("\n").match(/Total DRC errors found: (\d+)/);
