@@ -1,0 +1,97 @@
+diff --git a/include/yalecad/base.h b/include/yalecad/base.h
+old mode 100644
+new mode 100755
+index 0fae85c..909a16f
+--- a/include/yalecad/base.h
++++ b/include/yalecad/base.h
+@@ -181,7 +181,7 @@ typedef long SHORT_LONG ;
+ #define P15( a,b,c,d,e,f,g,h,i,j,k,l,m,n,o) \
+ 				a,b,c,d,e,f,g,h,i,j,k,l,m,n,o
+ typedef void *VOIDPTR ;
+-typedef void VOID ;
++#define VOID int /* WASM: K&R callers assume int returns */
+ 
+ #else  /* PROTOTYPES don't exist */
+ #define  P1( a )                  
+diff --git a/src/Ylib/stats.c b/src/Ylib/stats.c
+old mode 100644
+new mode 100755
+index 6ea5994..c25e1f1
+--- a/src/Ylib/stats.c
++++ b/src/Ylib/stats.c
+@@ -37,7 +37,7 @@ static char SccsId[] = "@(#) stats.c version 3.8 2/26/92" ;
+ #endif  /* AVOID */
+ 
+ /* print out the statistics of the program to the given file */
+-void Yprint_stats( fout )
++int Yprint_stats( fout )
+ FILE *fout ;
+ {
+ 
+diff --git a/src/Ylib/system.c b/src/Ylib/system.c
+old mode 100644
+new mode 100755
+index d3cf208..d709f6e
+--- a/src/Ylib/system.c
++++ b/src/Ylib/system.c
+@@ -11,6 +11,45 @@ static char SccsId[] = "@(#) system.c version 3.4 8/28/90" ;
+ #include <yalecad/file.h>
+ #include <yalecad/message.h>
+ 
++#ifdef __EMSCRIPTEN__
++/* WASM port: no shell. Emulate the few commands graywolf runs: mv, cp, rm -rf, and Mincut's awk splt_file.a. */
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++#ifdef NISHKAM_ASYNC
++#include <emscripten.h>
++#include <emscripten/em_js.h>
++/* other programs (genrows) are run by the JS host: Module.nishkamSystem(cmd) -> exit code */
++EM_ASYNC_JS(int, js_system, (const char *cmd), { return await Module.nishkamSystem(UTF8ToString(cmd)); });
++#endif
++static int nshell_copy(const char *a, const char *b)
++{ FILE *i = fopen(a, "rb"), *o; char buf[4096]; size_t n; if (!i) return 1; o = fopen(b, "wb"); if (!o) { fclose(i); return 1; }
++  while ((n = fread(buf, 1, sizeof buf, i)) > 0) fwrite(buf, 1, n, o); fclose(i); fclose(o); return 0; }
++static int nshell_split(const char *cel)
++{ char mf[512], sf[512], line[8192], first[64]; FILE *in = fopen(cel, "r"), *m, *s; int sc = 0; char *dot;
++  if (!in) return 1; strcpy(mf, cel); dot = strchr(mf, '.'); if (!dot) return 1; strcpy(sf, mf); strcpy(dot, ".mcel"); strcpy(strchr(sf, '.'), ".scel");
++  m = fopen(mf, "a"); s = fopen(sf, "w"); fprintf(s, "\n");
++  while (fgets(line, sizeof line, in)) { first[0] = 0; sscanf(line, "%63s", first);
++    if (!strcmp(first, "cell")) { sc = 1; fputs(line, s); }
++    else if (!strcmp(first, "hardcell") || !strcmp(first, "softcell") || !strcmp(first, "pad")) { sc = 0; fputs(line, m); }
++    else fputs(line, sc ? s : m); }
++  fclose(in); fclose(m); fclose(s); return 0; }
++static int nshell(const char *cmd)
++{ char a[512], b[512], c[512];
++  if (sscanf(cmd, "/bin/mv %511s %511s", a, b) == 2) return rename(a, b) ? 1 : 0;
++  if (sscanf(cmd, "/bin/cp %511s %511s", a, b) == 2) return nshell_copy(a, b);
++  if (sscanf(cmd, "/bin/rm -rf %511s", a) == 1) { remove(a); return 0; }
++  if (sscanf(cmd, "awk -f %511s %511s", a, b) == 2) return nshell_split(b);
++  (void)c;
++#ifdef NISHKAM_ASYNC
++  return js_system(cmd);
++#else
++  return 1;
++#endif
++}
++#define system(x) nshell(x)
++#endif
++
+ INT Ysystem( program, abortFlag, exec_statement, abort_func )
+ char *program ;
+ BOOL abortFlag ;
+diff --git a/src/twmc/savewolf.c b/src/twmc/savewolf.c
+old mode 100644
+new mode 100755
+index fe37f3e..705fa41
+--- a/src/twmc/savewolf.c
++++ b/src/twmc/savewolf.c
+@@ -32,6 +32,8 @@ static char SccsId[] = "@(#) savewolf.c version 3.12 9/16/91" ;
+ #include <temp.h>
+ #include <yalecad/debug.h>
+ #include <yalecad/file.h>
++extern double calc_core_factor(), calc_lap_factor(), calc_time_factor(); /* WASM: implicit int decl mismatched */
++extern int HPO(FILE *fp, double d); /* WASM: prototype so int args are converted */
+ 
+ #define MAXTIMEBEFORESAVE 600.0   /* seconds before new save 10min. */
+ 
