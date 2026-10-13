@@ -23,3 +23,4 @@ Not vendored, loaded from jsdelivr at pinned versions: `@yowasp/yosys@0.68.1207`
 - **Surfer (EUPL-1.2):** loaded in its own iframe and driven only through `postMessage`. Unmodified apart from one line in `index.html` that turns the service-worker registration off.
 - **elkjs (EPL-2.0), Verilator (LGPL-3.0):** unmodified, used as separate scripts or wasm modules.
 - **kwasm (GPL-3.0):** unmodified, runs in a same-origin iframe (`host.html`) driven only by `postMessage`; the GDS never leaves the browser. Layer colours from the PDK `gf180mcu.lyp` (Apache-2.0). 3D metal thickness comes from the PDK tech LEF; gaps are display-only (labelled in the view).
+- **OpenSTA (GPL-3.0):** unmodified upstream commit defec0b built with Emscripten (static Tcl 8.6.14, CUDD, no threads), runs in its own Web Worker (`web/studio/engines/opensta.worker.js`); build recipe in `web/vendor/opensta/defec0b/SOURCE.md`. The full gf180mcu liberty (Apache-2.0) ships gzipped next to it.
