@@ -13,16 +13,36 @@ you need to continue without asking the owner to explain again.
 - Docs and copy must be plain and simple: no buzzwords, no jargon. He asked for this explicitly.
 - Commit as him, with you as co-author:
   `git -c user.name="Yashvardhan Singh" -c user.email="yvs.373@gmail.com" commit ...`
-- Pushing to `main` publishes the live site within about a minute. Show him changes locally first
-  (`cd web && python -m http.server 8000`), and push when he says so.
+- Pushing to `main` publishes the live site within about a minute. Check changes locally first
+  (`cd web && python -m http.server 8000`). During builds he wants verified milestones pushed as they land;
+  for anything risky to the existing pages, ask first.
+- Owner's working style: Claude acts as CTO. Delegate code to Sonnet subagents and docs/logs to Haiku subagents.
+  Push verified milestones to `main`.
+- Every new page must be linked from the landing page.
+- Test designs only validate the tool. They do not prove a design is good.
 
 ## How it works
 
 - **RTL problems** are graded in the browser. `web/worker.js` loads YoWASP Yosys (`@yowasp/yosys@0.68.1207`,
   ~70 MB WebAssembly from jsdelivr). `web/grader.js` builds a miter of the user's design against the reference
   and runs `sat -seq 20` with undefined initial state and the reset asserted on cycle 1. A failure returns a
-  counterexample VCD, which the page shows as a cycle table. There is no testbench and no in-browser simulator:
-  no usable iverilog/Verilator WebAssembly build exists.
+  counterexample VCD, which the page shows as a cycle table. The practice page has no testbench; Studio has simulation.
+- **Nishkam Studio** (`web/studio.html`, code in `web/studio/`) is a browser IDE for the whole RTL-to-GDS flow.
+  `web/studio/app.js` is the page logic, `stages.js` the flow order, `engines/` one file per tool with a `*.worker.js`
+  each, and `viewers/` the layout (DEF), GDS, timing and report views. Third-party builds are in `web/vendor/<tool>/<version>/`
+  and their licences in `web/vendor/THIRD_PARTY.md`.
+  - In the browser (WebAssembly, no install): lint (Yosys, Verilator via verilator-wasm), simulation (Icarus),
+    synthesis (Yosys + a trimmed gf180 liberty), timing and power estimate (our own JS static timing on gf180 liberty
+    tables; matches OpenSTA setup/hold slack on test designs), schematic (netlistsvg), waveforms (Surfer), placement
+    (graywolf), routing (qrouter), GDS + DRC + extraction (Magic), LVS (Netgen). No OpenROAD (no WASM build), no clock tree.
+  - With the local runner connected, the physical stages run real LibreLane in the container instead
+    (Properties → Physical engine: Automatic / Runner / In browser). Runner v0.2 runs one stage or a range
+    (LibreLane `-F`/`-T`), streams the log, and serves metrics/files. Optional shell: `--allow-shell`, off by default.
+    `start-runner.bat` prints a Studio link and a Practice link.
+  - Tests: `node web/studio/stages.test.mjs`, `node web/studio/engines/selftest.node.mjs`,
+    `node web/studio/engines/pd.selftest.mjs 8`, `node web/studio/engines/lvs.selftest.mjs`,
+    `node web/studio/viewers/parse.test.mjs`, `node web/studio/viewers/gds.test.mjs`. Browser self-tests:
+    `web/studio/engines/selftest.html`, `web/studio/viewers/harness.html`.
 - **Physical design problems** run on the user's machine, like Colab's "connect to a local runtime".
   `runner/nishkam_runner.py` (Python standard library only) listens on 127.0.0.1:7381 and needs a token passed in
   the page URL fragment (`app.html#runner=...&token=...`). It only accepts the origins in `--origin`. It writes
@@ -30,7 +50,7 @@ you need to continue without asking the owner to explain again.
   is built from `BASE_CONFIG` plus an allowlist of knobs; anything else is refused. Jobs live in
   `~/eda/designs/nishkam_jobs` (= `/foss/designs/nishkam_jobs` in the container). One job at a time.
 - The PDK is gf180mcuD. CTS is limited to clkbuf_8/4/2 because clkbuf_16 hits DRT-1231 pin-access failures.
-- **Site:** `web/index.html` is the landing page and `web/app.html` + `web/app.js` is the practice page.
+- **Site:** `web/index.html` is the landing page, `web/app.html` + `web/app.js` is the practice page, and `web/studio.html` is Studio.
   There is no build step and no framework; all libraries come from CDNs.
 - **Deploy:** `.github/workflows/pages.yml` publishes `web/` on every push to `main`.
 
@@ -75,18 +95,19 @@ Done:
 - Runner self-test passes.
 - Landing page and brand are live.
 - The landing and practice pages render correctly at phone width (390px).
+- Page → runner → LibreLane → page round trip verified (shreg4: signoff clean 14/14).
+- Nishkam Studio: full RTL-to-GDS in the browser with no runner, plus Netgen LVS. Runner v0.2 with stage ranges and live log.
 
 Not yet verified:
-- The page → runner → LibreLane → page round trip has never been run through the UI. Each half was tested
-  separately. Next time: he runs `start-runner.bat` and pastes the printed link; you test both flow buttons on
-  the live site.
-- Chrome's Local Network Access prompt when the https site calls 127.0.0.1. Safari may block it.
+- Chrome's Local Network Access prompt when the https (github.io) site calls 127.0.0.1. Safari may block it.
+- Studio in Safari.
 
 Open items:
 - Grading runs in the browser, so reference answers can be read. Move grading server-side before it is
   used for hiring or data licensing.
 - Make `squeeze-tiny8` harder: measure the smallest die that passes signoff and set the limit near it.
 - Add more problems, especially STA / CDC / physical design ones. Those are the main difference from competitors.
-- On the 20-minute timeout, the runner stops waiting but LibreLane keeps running inside the container.
+- Studio: add a clock tree path for the in-browser flow (currently none). Check the in-browser timing against
+  OpenSTA on more designs before trusting it beyond the test set.
 - When a page looks broken in a browser screenshot, check whether it is just mid-animation (reveal on scroll,
   hero fade-in) before changing code.
