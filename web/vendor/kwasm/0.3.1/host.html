@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>kwasm host</title>
+<style>html,body,#v{height:100%;margin:0;background:#07080c}</style>
+<div id="v"></div>
+<script src="./kwasm-0.3.1.js"></script>
+<script>
+// Parent posts {nk:"load", gds:ArrayBuffer, lyp, layerstack, view:"2d"|"3d"}; or {nk:"view", view}. Nothing leaves the browser.
+let viewer, n = 0;
+const send = (m) => new Promise((res) => {
+  const requestId = "r" + ++n;
+  const h = (e) => { if (e.data && e.data.requestId === requestId && e.data.type !== "kwasm:request") { removeEventListener("message", h); res(e.data); } };
+  addEventListener("message", h);
+  postMessage({ type: "kwasm:request", version: 2, viewerId: "nk", requestId, ...m }, location.origin);
+});
+const b64 = (buf) => { let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+addEventListener("message", async (e) => {
+  const d = e.data; if (!d || !d.nk || e.source !== parent) return;
+  const reply = (o) => parent.postMessage({ nk: "reply", ...o }, "*");
+  try {
+    if (d.nk === "load") {
+      if (!viewer) { viewer = Kwasm.mount(document.getElementById("v"), { viewerId: "nk" }); await viewer.ready; }
+      const r = [];
+      r.push(await send({ action: "loadGds", gds: b64(d.gds), resetProject: true }));
+      if (d.lyp) r.push(await send({ action: "loadLyp", lyp: d.lyp }));
+      if (d.layerstack) r.push(await send({ action: "loadLayerstack", layerstack: d.layerstack }));
+      if (d.view) r.push(await send({ action: "setView", view: d.view }));
+      reply({ id: d.id, results: r });
+    } else if (d.nk === "view") reply({ id: d.id, results: [await send({ action: "setView", view: d.view })] });
+  } catch (err) { reply({ id: d.id, error: String(err && err.message || err) }); }
+});
+parent.postMessage({ nk: "hostready" }, "*");
+</script>

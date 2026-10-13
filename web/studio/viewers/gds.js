@@ -34,6 +34,7 @@ export function mount(el, ctx) {
     <label class="vw-note" style="margin:0">Depth <input class="vw-depth" type="range" min="0" max="0" value="0" style="width:90px;padding:0;vertical-align:middle"> <span class="vw-dv">0</span></label>
     <span class="vw-note vw-t"></span>
     <button class="vw-btn vw-fit">Fit</button>
+    <button class="vw-btn vw-3d" title="KLayout viewer (2D/3D) in a frame">KLayout / 3D</button>
   </div>
   <div class="vw-body">
     <div class="vw-side" style="width:190px"></div>
@@ -42,6 +43,15 @@ export function mount(el, ctx) {
   <div class="vw-status"><span class="vw-xy">x -, y - um</span><span class="vw-info"></span></div>`;
   const $ = (s) => el.querySelector(s);
   const selFile = $(".vw-file"), inFile = $("input[type=file]"), selTop = $(".vw-top"), depthIn = $(".vw-depth"), dv = $(".vw-dv"), note = $(".vw-t");
+  let curSrc = null, k3 = null; // curSrc: async () => ArrayBuffer of the shown GDS
+  $(".vw-3d").onclick = async () => {
+    const b = $(".vw-3d");
+    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; b.textContent = "KLayout / 3D"; return; }
+    if (!curSrc) return;
+    const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0;z-index:5;background:#07080c";
+    $(".vw-body").style.position = "relative"; $(".vw-body").appendChild(box);
+    const m = await import("./gds3d.js"); k3 = m.mount(box, { getBuffer: curSrc, view: "3d" }); k3.box = box; b.textContent = "Back to 2D";
+  };
   const side = $(".vw-side"), wrap = $(".vw-canvas"), cv = $("canvas"), g = cv.getContext("2d"), msg = $(".vw-msg"), xy = $(".vw-xy"), info = $(".vw-info");
 
   let eng = null, meta = null, flat = null, view = { s: 1, ox: 0, oy: 0 }, W = 0, H = 0, raf = 0, dirty = false, loadId = 0, fitted = false;
@@ -129,6 +139,7 @@ export function mount(el, ctx) {
 
   async function load(buf, label) {
     const t = performance.now(); setMsg("Parsing " + label + "..."); flat = null; fitted = false; meta = null; loadMs = 0; invalidate();
+    const keep = buf.slice(0); curSrc = async () => keep.slice(0);
     eng?.destroy(); eng = makeEngine(); names = await layerInfo();
     try { meta = await eng.load(buf); } catch (e) { setMsg("Not a valid GDS: " + e.message); return; }
     const tops = meta.tops.length ? meta.tops : meta.cells;

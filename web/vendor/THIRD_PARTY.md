@@ -14,6 +14,7 @@ Each folder has its own LICENSE and SOURCE.md. Folder names carry the version so
 | `magic/bed8d4f/` | Magic VLSI headless WebAssembly build (GDS, DRC, extraction) | GPL-2.0 | https://github.com/RTimothyEdwards/magic | commit bed8d4f |
 | `gf180mcu/pd-7b70722/` | gf180mcu_fd_sc_mcu7t5v0 cell LEF, tech LEF, graywolf .par, GDS, SPICE and Magic tech file | Apache-2.0 | https://github.com/google/gf180mcu-pdk | open_pdks 7b70722e |
 | `netgen/3cb047b/` | Netgen LVS (v1.5.324) + Tcl 8.6.14 as one WebAssembly module, gf180mcuD LVS setup file | GPL (Netgen), Tcl license (BSD-style), Apache-2.0 (setup file) | https://github.com/RTimothyEdwards/netgen | commit 3cb047b |
+| `kwasm/0.3.1/` | kwasm: KLayout compiled to WebAssembly, 2D and 3D GDS viewer, one JS file (3.9 MB) + `host.html` (our postMessage glue) + `gf180mcu.lyp` | GPL-3.0 (KLayout; Three.js MIT bundled) | https://pypi.org/project/kwasm/ (doplaydo/kwasm) | wheel kwasm-0.3.1 sha256 4cbd66d7...db13a |
 
 Not vendored, loaded from jsdelivr at pinned versions: `@yowasp/yosys@0.68.1207` (ISC / Apache-2.0), `verilator-wasm@1.0.0` (MIT; Verilator itself LGPL-3.0 or Artistic-2.0).
 
@@ -22,3 +23,4 @@ Not vendored, loaded from jsdelivr at pinned versions: `@yowasp/yosys@0.68.1207`
 - **Icarus (GPL-2.0):** mere aggregation. It runs in its own Web Worker (`web/studio/engines/icarus.worker.js`) and exchanges only text and files through messages. No Nishkam code is linked into it. The licence text and source link ship beside it, and the full source is at the VeriSim repo above.
 - **Surfer (EUPL-1.2):** loaded in its own iframe and driven only through `postMessage`. Unmodified apart from one line in `index.html` that turns the service-worker registration off.
 - **elkjs (EPL-2.0), Verilator (LGPL-3.0):** unmodified, used as separate scripts or wasm modules.
+- **kwasm (GPL-3.0):** unmodified, runs in a same-origin iframe (`host.html`) driven only by `postMessage`; the GDS never leaves the browser. Layer colours from the PDK `gf180mcu.lyp` (Apache-2.0). 3D metal thickness comes from the PDK tech LEF; gaps are display-only (labelled in the view).
