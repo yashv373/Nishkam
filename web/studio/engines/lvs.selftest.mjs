@@ -19,6 +19,7 @@ const files = { [`${top}.spice`]: mg.files[`${top}.spice`], [`${top}.v`]: netlis
 const lv = await L.handle({ files, options: { top } }, io);
 console.log(`LVS layout vs netlist: match=${lv.summary.match} devices=${lv.summary.devices} nets=${lv.summary.nets} (${lv.summary.ms} ms) ${lv.summary.result}`);
 t("lvs ran", lv.summary.devices !== null);
+t("layout matches netlist", lv.summary.match === true);
 // 2. detection: a deliberately broken layout (one transistor removed) must be reported as a mismatch
 const bad = new TextDecoder().decode(mg.files[`${top}.spice`]).replace(/^X2 Q a_2665_112# VDD VNW pfet.*$/m, "");
 const lb = await L.handle({ files: { ...files, [`${top}.spice`]: bad }, options: { top } }, io);

@@ -10,7 +10,8 @@ const dec = (b) => (typeof b === "string" ? b : new TextDecoder().decode(b));
 // assumeWellTaps (default): wells joined to VDD/VSS, filler cells dropped. Honest limit: an ideal-tap assumption, not a tap check.
 export function prepare(spiceText, verilogText, cellSpice, { assumeWellTaps = true } = {}) {
   let lay = spiceText;
-  if (assumeWellTaps) lay = lay.split("\n").filter((l) => !/^XS?FILL/.test(l)).join("\n").replace(/[^\s]*\/VNW(?=\s|$)/g, "VDD").replace(/[^\s]*\/VPW(?=\s|$)/g, "VSS");
+  if (assumeWellTaps) lay = lay.split("\n").filter((l) => !/^XS?FILL/.test(l)).join("\n").replace(/[^\s]*\/VNW(?=\s|$)/g, "VDD").replace(/[^\s]*\/VPW(?=\s|$)/g, "VSS").replace(/[^\s]*\/VDD(?=\s|$)/g, "VDD").replace(/[^\s]*\/VSS(?=\s|$)/g, "VSS").replace(/\$SUB(?=\s|$)/g, "VSS")
+    .replace(/^(\.subckt\s+(?!gf180mcu_)\S+.*)$/gm, "$1 VDD VSS"); // power pins are not top-level ports in this flow: add them
   const pg = (v) => v
     .replace(/(module\s+\S+?\s*\()/, "$1VDD, VSS, ").replace(/(module[^;]*;)/, "$1\n  inout VDD; inout VSS;")
     .replace(/(\bgf180mcu_\w+\s+\S+\s*\([^;]*?)\)\s*;/g, "$1, .VDD(VDD), .VSS(VSS), .VNW(VDD), .VPW(VSS));");

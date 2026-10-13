@@ -47,7 +47,7 @@ export async function handle({ files, options = {} }, { log, progress }) {
     log(`DRC: ${summary.drcErrors} error tiles (${summary.drcInCells} inside library cells, ${summary.drcFromLayout} from the layout)\n` + summary.drcRules.join("\n") + "\n");
   }
   if (options.extract) {
-    for (const c of ["extract all", "ext2spice lvs", `ext2spice -o /${top}.spice ${top}`]) cmd(c);
+    for (const c of ["extract do local", "extract no capacitance", "extract no coupling", "extract no resistance", "extract no adjust", "extract all", "ext2spice lvs", `ext2spice -o /${top}.spice ${top}`]) cmd(c);
     res[`${top}.spice`] = mod.FS.readFile(`/${top}.spice`);
   }
   progress(1);

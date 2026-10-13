@@ -226,6 +226,7 @@ function physRows() {
   }
   if (r) rows.push(["Failed nets", r.failedNets], ["Routing time", ms(r)]);
   if (g) rows.push(["DRC error tiles", g.drcErrors], ["  inside library cells", g.drcInCells], ["  from the layout", g.drcFromLayout], ["GDS size", (g.gdsBytes / 1024).toFixed(1) + " KB"], ["Magic time", ms(g)]);
+  if (g?.lvs) rows.push(["LVS", g.lvs.error ? "not run: " + g.lvs.error : g.lvs.match ? "match" : "MISMATCH: " + g.lvs.result], ...(g.lvs.devices ? [["  devices (layout / netlist)", g.lvs.devices.join(" / ")], ["  nets (layout / netlist)", g.lvs.nets.join(" / ")]] : []));
   return rows;
 }
 // Reports tab = our summary card on top, the metrics viewer below it.
@@ -278,6 +279,7 @@ function regBrowser(paths) {
   const old = ctx.getFile;
   if (!ctx.files.some((p) => p.startsWith("browser/"))) ctx.getFile = async (p) => (p.startsWith("browser/") ? (typeof outputs[p] === "string" ? outputs[p] : outputs[p].slice().buffer) : old(p));
   ctx.files = [...ctx.files.filter((p) => !paths.includes(p)), ...paths];
+  ctx.files.sort((x, y) => /^browser\/route\//.test(x) - /^browser\/route\//.test(y));   // viewer opens the last DEF: routed, not placed
   for (const v of Object.values(viewers)) v.inst.update?.(ctx);
 }
 async function onResult(id, r) {
@@ -346,9 +348,19 @@ async function localStage(id, io) {
   if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top } });
   else if (id === "route") r = await m.run({ ...a, files: need(PD.place, "Placement"), options: { top } });
   else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true } });
-  if (r.ok) PD[id === "signoff" ? "magic" : id] = r.files;
   const sm = r.summary || {};
-  if (id === "signoff" && sm.drcErrors > 0) return { ...r, files: pre(id, r.files), state: "warn", info: `${sm.drcErrors} DRC tiles` };
+  if (id === "signoff" && r.ok) {   // LVS: Magic layout SPICE vs the Yosys gate netlist. A mismatch is a warning, not a crash.
+    try {
+      const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top } });
+      sm.lvs = l.summary; Object.assign(r.files, l.files);
+    } catch (e) { sm.lvs = { error: e.message }; io.onLog("WARNING: LVS did not run: " + e.message + "
+"); }
+  }
+  if (r.ok) PD[id === "signoff" ? "magic" : id] = r.files;
+  if (id === "signoff") {
+    const v = sm.lvs, lvs = !v || v.error ? "LVS not run" : v.match ? "LVS match" : "LVS MISMATCH";
+    if (sm.drcErrors > 0 || !v || v.error || !v.match) return { ...r, files: pre(id, r.files), state: "warn", info: `${sm.drcErrors} DRC tiles, ${lvs}` };
+  }
   return { ...r, files: pre(id, r.files) };
 }
 // Which project files a stage reads: no testbenches, except the chosen one for simulation.

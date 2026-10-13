@@ -13,7 +13,7 @@ export async function handle({ files, options = {} }, { log, progress }) {
   const cfg = `lef ${PDK.tlef}\nlef ${PDK.lef}\nnum_layers ${layers}\nstack ${layers}\n${obs}${options.cfgExtra || ""}`;
   const t0 = Date.now();
   const r = await runTool(V.qf, "qrouter", ["-c", `${top}.cfg`, "-p", "VDD,VNW", "-g", "VSS,VPW", "-d", `${top}_route.rc`, "-nog", top],
-    { [PDK.tlef]: tlef, [PDK.lef]: lef, [`${top}.def`]: files[defName], [`${top}.cfg`]: cfg }, (s) => log(s.split("\n").filter((l) => /Final|Failed|fail|remaining.*00$/.test(l)).join("\n") + "\n"), {});
+    { [PDK.tlef]: tlef, [PDK.lef]: lef, [`${top}.def`]: files[defName], [`${top}.cfg`]: cfg }, (s) => log(s.split("\n").filter((l) => /Final|Failed|fail|remaining.*00$|tap|obstruct/i.test(l)).join("\n") + "\n"), {});
   progress(1);
   const routed = r.files[`${top}_route.def`];
   const failed = /No failed routes/.test(r.out) ? 0 : +((r.out.match(/Final: Failed net routes: (\d+)/) || [])[1] ?? -1);
