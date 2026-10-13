@@ -34,6 +34,13 @@ export function createConsole({ logEl, msgEl, msgCount, filterEl, timerEl, shell
     startTimer() { t0 = Date.now(); clearInterval(tick); tick = setInterval(() => { timerEl.textContent = ((Date.now() - t0) / 1000).toFixed(0) + " s"; }, 1000); },
     stopTimer() { clearInterval(tick); },
     enableShell(on) { shellRow.hidden = !on; },
-    shellSubmit(cmd) { this.log("shell", "$ " + cmd); return onShell(cmd, (t) => this.log("shell", t)); },
+    // the container login banner prints "[INFO] Final PATH/PYTHONPATH" lines; drop them (chunks may split a line, so buffer the tail)
+    async shellSubmit(cmd) {
+      this.log("shell", "$ " + cmd); let buf = "";
+      const bad = (l) => /^\[INFO\] Final (PATH|PYTHONPATH)/.test(l);
+      const put = (t) => { const ls = (buf + t).split("\n"); buf = ls.pop(); const keep = ls.filter((l) => !bad(l)); if (keep.length) this.log("shell", keep.join("\n")); };
+      await onShell(cmd, put);
+      if (buf && !bad(buf)) this.log("shell", buf);
+    },
   };
 }

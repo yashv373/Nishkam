@@ -31,3 +31,10 @@ assert.equal(engineId({ engine: "yosys", pick: "lintEngine" }, { lintEngine: "ve
 { const t = mk(false); t.deps.engine = async () => ({ run: async () => ({ ok: true }) });
   await runStages(["schematic"], t.deps); assert.equal(t.st.schematic, "failed"); }
 console.log("stages2 ok");
+{ const t = mk(false); const seen = [];
+  t.deps.local = () => true;
+  t.deps.localStage = async (id) => (seen.push(id), id === "cts" ? { ok: true, state: "unavailable", info: "skipped" } : { ok: id !== "route", files: { ["browser/" + id]: 1 } });
+  await runStages(["floorplan", "place", "cts", "route", "sta", "signoff"], t.deps);
+  assert.deepEqual(seen, ["floorplan", "place", "cts", "route"]);
+  assert.deepEqual([t.st.place, t.st.cts, t.st.route, t.st.sta, t.st.signoff], ["passed", "unavailable", "failed", "idle", "idle"]); }
+console.log("stages local ok");

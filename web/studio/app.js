@@ -29,7 +29,7 @@ $("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" 
 
 // ---------- options (Properties panel) ----------
 const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
-  clockPeriod: 40, dieW: 170, dieH: 170, density: 50, congestion: false };
+  clockPeriod: 40, inDelay: "", outDelay: "", pdEngine: "auto", dieW: 170, dieH: 170, density: 50, congestion: false };
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
 const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
@@ -39,6 +39,9 @@ const FIELDS = [
   { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
   { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "presta", "floorplan", "place", "cts", "sta"] },
   { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "presta", "floorplan", "cts", "sta"], rn: true },
+  { k: "inDelay", label: "Input delay (ns)", t: "number", ph: "20% of period", st: ["presta", "sta"] },
+  { k: "outDelay", label: "Output delay (ns)", t: "number", ph: "20% of period", st: ["presta", "sta"] },
+  { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser (qflow)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"] },
   { k: "dieW", label: "Die width (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "dieH", label: "Die height (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "density", label: "Target density (%)", t: "number", st: ["place"], rn: true },
@@ -57,11 +60,11 @@ function buildProps() {
       inp.value = opts[f.k];
       if (f.t === "file" && !project.list().includes(opts[f.k])) inp.value = project.list().find(project.isTb) || "";
     } else {
-      inp = document.createElement("input"); inp.type = f.t === "check" ? "checkbox" : f.t === "number" ? "number" : "text";
+      inp = document.createElement("input"); if (f.ph) inp.placeholder = f.ph; inp.type = f.t === "check" ? "checkbox" : f.t === "number" ? "number" : "text";
       if (f.t === "check") inp.checked = opts[f.k]; else inp.value = opts[f.k];
     }
     inp.id = "o_" + f.k;
-    inp.onchange = () => { opts[f.k] = f.t === "check" ? inp.checked : f.t === "number" ? +inp.value : inp.value; store.set("studio:opts", opts);
+    inp.onchange = () => { opts[f.k] = f.t === "check" ? inp.checked : f.t === "number" ? (inp.value === "" ? "" : +inp.value) : inp.value; store.set("studio:opts", opts);
       if (f.rn) markStale(); };
     if (f.t === "check") d.append(Object.assign(l, {}), inp), l.prepend(inp); else d.append(l, inp);
     if (f.rn) { const s = document.createElement("small"); s.textContent = "runner setting"; d.append(s); }
@@ -75,6 +78,9 @@ function filterProps() {
 }
 $("propsToggle").onclick = () => $("props").classList.toggle("closed");
 // Runner knobs: ONLY the runner allowlist (CLOCK_PERIOD, DIE_AREA, PL_TARGET_DENSITY_PCT, SYNTH_STRATEGY, GRT_ALLOW_CONGESTION).
+// LibreLane constrains inputs and outputs at 20% of the clock period unless told otherwise; the estimate does the same.
+const ioDelay = (v) => (v === "" || v == null ? +(0.2 * opts.clockPeriod).toFixed(3) : +v);
+const pdLocal = () => opts.pdEngine === "browser" || (opts.pdEngine !== "runner" && !runnerInfo);
 const knobs = () => ({ CLOCK_PERIOD: opts.clockPeriod, DIE_AREA: [0, 0, opts.dieW, opts.dieH], PL_TARGET_DENSITY_PCT: opts.density,
   SYNTH_STRATEGY: opts.strategy, GRT_ALLOW_CONGESTION: !!opts.congestion });
 const markStale = () => { for (const s of STAGES) if (state[s.id]?.st === "passed" || state[s.id]?.st === "warn") state[s.id].st = "stale"; drawNav(); };
@@ -111,7 +117,7 @@ const menu = (id, x, y) => {
   document.body.append(m); setTimeout(() => addEventListener("click", () => m.remove(), { once: true }));
 };
 function drawNav() {
-  renderNavigator($("nav"), state, selected, { select, run: (id) => start(plan("one", id)), menu }, R.hasConn() && !!runnerInfo);
+  renderNavigator($("nav"), state, selected, { select, run: (id) => start(plan("one", id)), menu }, (R.hasConn() && !!runnerInfo) || pdLocal());
 }
 function select(id) {
   selected = id; cons.setFilter(id === "files" || id === "reports" ? "" : id); filterProps(); drawNav();
@@ -186,7 +192,7 @@ async function loadDemo() {
 // ---------- browser-engine outputs shown in tabs ----------
 const view = (n) => document.querySelector(`.view[data-v="${n}"]`);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const sum = {};   // browser results for the Reports card: synth / timing / power
+const sum = { phys: {} };   // browser results for the Reports card: synth / timing / power
 let wave = null, browserTiming = null;
 const EST = "Pre-layout estimate: ideal clock, no wires. Not signoff.";
 // Timing tab for the browser estimate (the OpenSTA viewer only reads runner reports).
@@ -209,6 +215,19 @@ function drawBrowserTiming() {
   el.append(w);
 }
 
+function physRows() {
+  const { place: p, route: r, signoff: g } = sum.phys; if (!p && !r && !g) return null;
+  const ms = (x) => (x?.ms == null ? "n/a" : (x.ms / 1000).toFixed(1) + " s");
+  const rows = [];
+  if (p) {
+    const dbu = +(((() => { const x = outputs[`browser/place/${p.top}.def`] || ""; return typeof x === "string" ? x : new TextDecoder().decode(x); })().match(/UNITS DISTANCE MICRONS (\d+)/) || [])[1] || 0);
+    const d = (p.die.match(/-?\d+/g) || []).map(Number), um = (v) => (dbu ? (v / dbu).toFixed(1) : v);
+    rows.push(["Components (cells + fill)", p.components], ["Die", d.length === 4 ? `${um(d[2] - d[0])} x ${um(d[3] - d[1])} ${dbu ? "µm" : "DEF units"}` : "n/a"], ["Placement time", ms(p)]);
+  }
+  if (r) rows.push(["Failed nets", r.failedNets], ["Routing time", ms(r)]);
+  if (g) rows.push(["DRC error tiles", g.drcErrors], ["  inside library cells", g.drcInCells], ["  from the layout", g.drcFromLayout], ["GDS size", (g.gdsBytes / 1024).toFixed(1) + " KB"], ["Magic time", ms(g)]);
+  return rows;
+}
 // Reports tab = our summary card on top, the metrics viewer below it.
 function repWrap(el) { if (!$("repHost")) { el.replaceChildren(h("div", "repcard"), Object.assign(h("div", "rephost"), { id: "repHost" })); el.firstChild.id = "repCard"; } }
 function repCard() {
@@ -223,6 +242,7 @@ function repCard() {
   c.replaceChildren(
     card("Synthesis report", sy && [["Cells", sy.cells ?? "n/a"], ["Area", f(sy.area, " µm²")], ...(sy.kinds || []).slice(0, 12).map(([k, n]) => [k, n])], "Run Synthesis to see cell count, area and cell kinds."),
     card("Timing (pre-layout estimate, ideal clock, no wires)", ti && [["Worst setup slack", f(ti.setup_slack_ns, " ns", 3)], ["Worst hold slack", f(ti.hold_slack_ns, " ns", 3)], ["Setup WNS", f(ti.wns_ns, " ns", 3)], ["Setup TNS", f(ti.tns_ns, " ns", 3)], ["Hold WNS", f(ti.hold_wns_ns, " ns", 3)], ["Fmax", f(ti.fmax_mhz, " MHz", 1)], ["Period", f(ti.period_ns, " ns")]], "Run Timing & Power (est.) after Synthesis. The local runner gives real timing after Routing."),
+    card("Physical (in-browser, qflow). " + NOT_LL, physRows(), "Run Placement, Routing and Signoff with no runner connected (or pick Physical engine: In browser)."),
     card("Power (pre-layout estimate, no wires)", pw && [["Total", pf(pw.total_uW)], ["Leakage", pf(pw.leakage_uW)], ["Internal", pf(pw.internal_uW)], ["Switching", pf(pw.switching_uW)]], "Browser power is coming."));
 }
 
@@ -253,9 +273,20 @@ async function showWave(vcd) {
   } catch (e) { emptyCard(el, "Waveform viewer not available yet", "VCD saved in Files / Artifacts."); }
 }
 
+// Make the in-memory browser job files visible to the Layout / GDS viewers next to any runner files.
+function regBrowser(paths) {
+  const old = ctx.getFile;
+  if (!ctx.files.some((p) => p.startsWith("browser/"))) ctx.getFile = async (p) => (p.startsWith("browser/") ? (typeof outputs[p] === "string" ? outputs[p] : outputs[p].slice().buffer) : old(p));
+  ctx.files = [...ctx.files.filter((p) => !paths.includes(p)), ...paths];
+  for (const v of Object.values(viewers)) v.inst.update?.(ctx);
+}
 async function onResult(id, r) {
   for (const [p, d] of Object.entries(r.files || {})) { outputs[p] = d; if (!artifacts.some((a) => a.name === p)) artifacts.push({ name: p, get: async () => outputs[p] }); }
   const sm = r.summary || {};
+  if (["place", "route", "signoff"].includes(id) && Object.keys(r.files || {}).some((p) => p.startsWith("browser/"))) {
+    sum.phys[id] = sm; regBrowser(Object.keys(r.files).filter((p) => p.startsWith("browser/")));
+    showTab(id === "signoff" ? "GDS" : "Layout");
+  }
   if (id === "synth" && r.ok) sum.synth = sm;
   if (id === "presta" && r.ok) {
     sum.timing = { wns_ns: sm.setup.wns_ns, tns_ns: sm.setup.tns_ns, fmax_mhz: sm.fmax_mhz, hold_wns_ns: sm.hold.wns_ns, setup_slack_ns: sm.setup.worst_slack_ns, hold_slack_ns: sm.hold.worst_slack_ns, hold_tns_ns: sm.hold.tns_ns, period_ns: sm.period_ns, est: true };
@@ -279,6 +310,7 @@ async function onResult(id, r) {
 
 // Engine loader: one file per engine id. The schematic gets a size guard and the RTL/gate-level pick.
 async function loadEngine(s) {
+  if (s.id === "presta") return { run: staRun };
   const m = await import(`./engines/${engineId(s, opts)}.js`);
   if (s.id !== "schematic") return m;
   return { run: (a) => {
@@ -286,6 +318,38 @@ async function loadEngine(s) {
     const n = countCells(a.files[file]);
     if (n > MAX_SCHEMATIC_CELLS) return { ok: true, files: {}, summary: { tooLarge: n } };
     return m.run({ ...a, files: { [file]: a.files[file] }, options: { ...a.options, file } }); } };
+}
+// signoff-lite.js does not pass IO delays, so call the STA worker directly.
+async function staRun({ files, options, onLog, onProgress, signal }) {
+  const { call } = await import("./engines/_rpc.js");
+  return call(new URL("./engines/sta.worker.js", import.meta.url), { mode: "both", files,
+    options: { clockPort: options.clockPort, periodNs: options.clockPeriod, top: options.top, inputDelayNs: ioDelay(options.inDelay), outputDelayNs: ioDelay(options.outDelay) } }, { onLog, onProgress, signal });
+}
+// ---------- in-browser physical design (qflow-style: graywolf + qrouter + Magic), used when no runner is connected ----------
+const PD = {};   // raw engine files between stages: place -> route -> magic
+const NOT_LL = "In-browser qflow result, not LibreLane signoff.";
+const pre = (dir, files) => Object.fromEntries(Object.entries(files).map(([n, d]) => [`browser/${dir}/${n}`, d]));
+async function localStage(id, io) {
+  const top = opts.top, need = (v, what) => { if (!v) throw new Error(`Run ${what} first.`); return v; };
+  if (id === "floorplan") { io.onLog("Floorplan is part of Placement in the browser flow (the die is sized from the cells). " + NOT_LL); return { ok: true, info: "in placement" }; }
+  if (id === "cts") return { ok: true, state: "unavailable", info: "skipped (qflow has no clock tree; runner does real CTS)" };
+  if (id === "sta") {
+    const nl = need(outputs["netlist.json"], "Synthesis");
+    io.onLog("Post-route STA is runner-only. Re-running the pre-layout estimate on the netlist (no wires).");
+    const r = await staRun({ files: { "netlist.json": nl }, options: { ...opts }, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
+    await onResult("presta", r); return { ok: r.ok, files: {}, state: "warn", info: "no wires" };
+  }
+  const eng = { place: "place", route: "route", signoff: "magic" }[id];
+  const m = await import(`./engines/${eng}.js`);
+  const a = { onLog: io.onLog, onProgress: io.onProgress, signal: io.signal };
+  let r;
+  if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top } });
+  else if (id === "route") r = await m.run({ ...a, files: need(PD.place, "Placement"), options: { top } });
+  else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true } });
+  if (r.ok) PD[id === "signoff" ? "magic" : id] = r.files;
+  const sm = r.summary || {};
+  if (id === "signoff" && sm.drcErrors > 0) return { ...r, files: pre(id, r.files), state: "warn", info: `${sm.drcErrors} DRC tiles` };
+  return { ...r, files: pre(id, r.files) };
 }
 // Which project files a stage reads: no testbenches, except the chosen one for simulation.
 const filesFor = (id) => Object.fromEntries(Object.entries(project.all()).filter(([n]) => !project.isTb(n) || (byId(id).src === "sim" && n === opts.tb)));
@@ -348,7 +412,7 @@ async function start(ids) {
   const res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
     options: () => ({ ...opts, knobs: knobs() }), setState, onLog: (id, l) => cons.log(id, l),
     onProgress: (id, f) => { frac = f; setProgress(); }, onResult,
-    engine: loadEngine, runnerJob });
+    engine: loadEngine, runnerJob, local: pdLocal, localStage });
   running = false; abort = null; frac = 0; applyFx(); cons.stopTimer();
   $("stop").disabled = true; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = false);
   setProgress(); drawNav();

@@ -13,6 +13,7 @@ Each folder has its own LICENSE and SOURCE.md. Folder names carry the version so
 | `qrouter/c8f1111/` | qrouter (non-Tcl), vlog2Cel and addspacers (from qflow) as WebAssembly | GPL-2.0 | https://github.com/RTimothyEdwards/qrouter, https://github.com/RTimothyEdwards/qflow | qrouter c8f1111, qflow 52ecda1 |
 | `magic/bed8d4f/` | Magic VLSI headless WebAssembly build (GDS, DRC, extraction) | GPL-2.0 | https://github.com/RTimothyEdwards/magic | commit bed8d4f |
 | `gf180mcu/pd-7b70722/` | gf180mcu_fd_sc_mcu7t5v0 cell LEF, tech LEF, graywolf .par, GDS, SPICE and Magic tech file | Apache-2.0 | https://github.com/google/gf180mcu-pdk | open_pdks 7b70722e |
+| `netgen/3cb047b/` | Netgen LVS (v1.5.324) + Tcl 8.6.14 as one WebAssembly module, gf180mcuD LVS setup file | GPL (Netgen), Tcl license (BSD-style), Apache-2.0 (setup file) | https://github.com/RTimothyEdwards/netgen | commit 3cb047b |
 
 Not vendored, loaded from jsdelivr at pinned versions: `@yowasp/yosys@0.68.1207` (ISC / Apache-2.0), `verilator-wasm@1.0.0` (MIT; Verilator itself LGPL-3.0 or Artistic-2.0).
 

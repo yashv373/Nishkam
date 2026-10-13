@@ -54,10 +54,10 @@ export const countCells = (j) => Object.values((typeof j === "string" ? JSON.par
 export const MAX_SCHEMATIC_CELLS = 500;
 
 // Consecutive runner stages become one job {from,to}; others stay single units.
-export function batches(ids) {
+export function batches(ids, whereOf = (id) => byId(id).where) {
   const out = [];
   for (const id of ids) {
-    const w = byId(id).where, last = out[out.length - 1];
+    const w = whereOf(id), last = out[out.length - 1];
     if (w === "runner" && last && last.where === "runner") last.ids.push(id);
     else out.push({ where: w, ids: [id] });
   }
@@ -71,9 +71,25 @@ export async function runStages(ids, deps) {
   const outputs = deps.seed || {}; let ok = true;
   const mark = (list, st, info) => list.forEach((id) => deps.setState(id, st, info));
   mark(ids, "queued");
-  for (const b of batches(ids)) {
+  // "local" = a runner-type stage that runs in the browser instead (deps.local(), engines in deps.localStage)
+  for (const b of batches(ids, (id) => (byId(id).where === "runner" && deps.local?.() ? "local" : byId(id).where))) {
     if (deps.signal?.aborted) { mark(b.ids, "idle"); continue; }
     if (!ok) { mark(b.ids, "idle"); continue; }
+    if (b.where === "local") {
+      for (const id of b.ids) {
+        if (deps.signal?.aborted || !ok) { mark([id], "idle"); continue; }
+        mark([id], "running");
+        try {
+          const r = await deps.localStage(id, { onLog: (l) => deps.onLog(id, l), onProgress: (f) => deps.onProgress?.(id, f), signal: deps.signal });
+          Object.assign(outputs, r.files || {}); deps.onResult?.(id, r);
+          if (!r.ok) { ok = false; mark([id], "failed", r.summary?.error); } else mark([id], r.state || "passed", r.info);
+        } catch (e) {
+          if (deps.signal?.aborted) mark([id], "idle");
+          else { ok = false; deps.onLog(id, "ERROR: " + e.message); mark([id], "failed", e.message); }
+        }
+      }
+      continue;
+    }
     if (b.where === "runner") {
       if (!deps.hasRunner()) { mark(b.ids, "unavailable", "needs local runner"); continue; }
       mark(b.ids.slice(0, 1), "running");   // the page flips the rest as the job's steps arrive
