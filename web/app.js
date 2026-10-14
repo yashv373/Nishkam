@@ -87,11 +87,22 @@ function openProblem(p) {
     : `You edit the knobs (JSON). The RTL is fixed. Allowed: <code>DIE_AREA</code> [x0, y0, x1, y1] in µm, <code>PL_TARGET_DENSITY_PCT</code>, <code>SYNTH_STRATEGY</code> (e.g. "AREA 0"), <code>GRT_ALLOW_CONGESTION</code>.`;
   $("statement").innerHTML = `<h1>${esc(p.title)}</h1>
     <div class="tags"><span class="tag diff ${p.difficulty}">${p.difficulty}</span>${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
-    ${p.statement}<div class="how">${how}</div>`;
+    ${p.statement}<div class="how">${how}</div><div id="aid"></div>`;
   monaco.editor.setModelLanguage(editor.getModel(), p.kind === "rtl" ? "systemverilog" : "json");
   editor.setValue(store.get(codeKey(p), p.starter));
   $("result").innerHTML = `<p class="muted">${p.kind === "rtl" ? "Write your design, then Submit." : "Pick your knobs, then Run flow."}</p>`;
-  renderList(); renderButtons();
+  renderList(); renderButtons(); renderAid();
+}
+const hintsShown = {};
+function renderAid() {
+  const p = current, el = $("aid");
+  if (!el || !p || !p.hints) return;
+  const n = hintsShown[p.id] || 0;
+  const hs = p.hints.slice(0, n).map((h, i) => `<p class="hintline"><b>Hint ${i + 1}.</b> ${esc(h)}</p>`).join("");
+  const more = n < p.hints.length ? `<button id="hintBtn">${n ? "Another hint" : "Hint"} (${n} of ${p.hints.length} shown)</button>` : "";
+  const wu = solved.has(p.id) && p.writeup ? `<div class="writeup"><h2>Write-up</h2>${p.writeup}</div>` : "";
+  el.innerHTML = hs + more + wu + `<p class="muted note">The answer and write-up are already in your browser, so this lock is only for your own practice.</p>`;
+  if ($("hintBtn")) $("hintBtn").onclick = () => { hintsShown[p.id] = n + 1; renderAid(); };
 }
 
 const solvedN = () => PROBLEMS.filter((p) => solved.has(p.id)).length;
@@ -152,7 +163,7 @@ async function submitRtl() {
   busy = false; renderButtons();
   if (p !== current) return;
   if (res.passed) {
-    solved.add(p.id); store.set("solved", [...solved]); renderList();
+    solved.add(p.id); store.set("solved", [...solved]); renderList(); renderAid();
     const kinds = res.stat?.kinds?.map(([k, n]) => `${n}× ${k}`).join(", ") || "";
     $("result").innerHTML = `<div class="banner ok big">✓ Accepted
         <small>${res.proved ? "Proved equal to the reference for all cycles after reset." : `Matches the reference for the first ${DEPTH} cycles after reset (a full proof was not possible).`} ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
