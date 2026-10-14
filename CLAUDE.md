@@ -106,6 +106,7 @@ Open items:
 - Grading runs in the browser, so reference answers can be read. Move grading server-side before it is
   used for hiring or data licensing.
 - Make `squeeze-tiny8` harder: measure the smallest die that passes signoff and set the limit near it.
+- Future: DFT problems with donn/difetto (scan chains + ATPG on LibreLane), issue #10.
 - Add more problems, especially STA / CDC / physical design ones. Those are the main difference from competitors.
 - Studio: check the in-browser timing against
   OpenSTA on more designs before trusting it beyond the test set.
