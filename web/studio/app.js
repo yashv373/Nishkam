@@ -39,7 +39,7 @@ const opts = { ...DEF, ...store.get("studio:opts", {}) };
 if (location.hash === "#demo=squeeze-tiny8") {
   const t8 = PROBLEMS.find((x) => x.id === "squeeze-tiny8");
   if (!project.get("tiny8.v")) project.add("tiny8.v", t8.files["tiny8.v"]);
-  Object.assign(opts, { top: "tiny8", tb: "", clockPeriod: 24, dieW: 134, dieH: 134, density: 80, pdEngine: "browser" });
+  Object.assign(opts, { top: "tiny8", tb: "", clockPeriod: 24, dieW: 250, dieH: 250, density: 50, pdEngine: "browser" });   // the problem's starting knobs, not the answer
   store.set("studio:opts", opts);
 }
 const FIELDS = [
