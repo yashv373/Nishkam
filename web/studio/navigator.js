@@ -1,6 +1,8 @@
 import { STAGES, GROUPS } from "./stages.js";
 const ICON = { idle: "○", queued: "◔", running: "", passed: "✓", warn: "!", failed: "✕", unavailable: "–", stale: "●" };
 const LABEL = { idle: "not run", queued: "queued", running: "running", passed: "passed", warn: "warnings", failed: "failed", unavailable: "unavailable", stale: "stale" };
+export const HINT = { sim: "Usually a few seconds. The first run downloads the simulator.", synth: "Usually 5 to 15 seconds. The first run downloads Yosys (about 70 MB).",
+  place: "Can take a few seconds to a minute.", route: "Can take a few seconds to a minute.", sta: "Usually a few seconds.", signoff: "Usually 5 to 15 seconds. The first run downloads Magic and Netgen." };
 // state: {id: {st, info, t}}  cb: {select, run, runTo, runFrom}
 export function renderNavigator(el, state, selected, cb, runnerOn) {
   el.replaceChildren();
@@ -12,7 +14,7 @@ export function renderNavigator(el, state, selected, cb, runnerOn) {
       row.className = `stage st-${v.st}` + (selected === s.id ? " sel" : ""); row.tabIndex = 0; row.dataset.id = s.id;
       const why = v.st === "unavailable" ? (v.info || "needs local runner")
         : s.where === "runner" && !runnerOn ? "needs local runner" : "";
-      row.title = why || LABEL[v.st];
+      row.title = why || (v.st === "running" && HINT[s.id]) || LABEL[v.st];
       const ico = document.createElement("span"); ico.className = "sico"; ico.textContent = ICON[v.st];
       const name = document.createElement("span"); name.className = "sname"; name.textContent = s.label;
       const chip = document.createElement("span"); chip.className = "chip st-" + v.st;

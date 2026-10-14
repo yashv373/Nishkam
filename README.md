@@ -78,6 +78,7 @@ node web/studio/engines/pd.selftest.mjs 8
 node web/studio/engines/lvs.selftest.mjs
 node web/studio/viewers/parse.test.mjs
 node web/studio/viewers/gds.test.mjs
+node web/landing.check.mjs
 ```
 
 Browser self-tests, open in a browser served from `web/`:

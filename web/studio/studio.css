@@ -74,7 +74,7 @@ button.chip{height:24px}
 .count.err{background:rgba(255,92,108,.2);color:var(--err)}.count.warn{background:rgba(255,176,32,.2);color:var(--warn)}
 .dockv{flex:1;min-height:0;overflow:auto;margin:0;padding:6px 10px;font:12px/1.5 var(--mono);white-space:pre-wrap;word-break:break-all}
 .dockv[hidden]{display:none}
-.msg{padding:2px 0;border-bottom:1px solid var(--line)}.msg.err{color:var(--err)}.msg.warn{color:var(--warn)}
+.msg{padding:2px 0;border-bottom:1px solid var(--line)}.msg.err{color:var(--err)}.msg.warn{color:var(--warn)}.msg.info{color:var(--text-3)}
 .art{display:flex;gap:8px;padding:2px 0;cursor:pointer}.art:hover{color:var(--glow)}
 #shellRow{display:flex;gap:6px;align-items:center;padding:4px 10px;border-top:1px solid var(--line);font-family:var(--mono)}
 #shellRow[hidden]{display:none}#shellRow input{font-family:var(--mono)}
@@ -205,3 +205,17 @@ body{overflow:auto;background:#000}
 
 :root[data-theme=dark] .sin img{filter:invert(1) hue-rotate(180deg)}
 :root[data-theme=dark] .svp{background:#0b0d14}
+
+#guide{position:absolute;top:12px;right:16px;z-index:20;width:340px;padding:14px 16px 16px;border-radius:var(--r-lg);border:1px solid var(--line);background:var(--bg-2);box-shadow:0 8px 30px rgba(0,0,0,.4)}
+#guide[hidden]{display:none}
+#guide h3{margin:0 0 6px;font-size:var(--fs-lg)}#guide p,#guide li{color:var(--text-2);margin:6px 0}#guide ol{padding-left:18px;margin:6px 0 12px}
+#guide #guideRun{width:100%;height:40px;font-size:var(--fs-lg)}
+#guideX{position:absolute;top:6px;right:8px;height:24px;padding:0 8px}
+
+/* tour */
+#tourHole{position:fixed;z-index:90;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.62),0 0 0 2px var(--glow);pointer-events:none;transition:all .25s ease}
+#tourPop{position:fixed;z-index:91;width:320px;padding:14px 16px;border-radius:var(--r-lg);border:1px solid var(--line);background:var(--bg-2);color:var(--text);box-shadow:0 10px 36px rgba(0,0,0,.45)}
+#tourPop h3{margin:2px 0 4px;font-size:var(--fs-lg)}#tourPop p{margin:0 0 12px;color:var(--text-2)}
+#tourPop .tcount{font-size:var(--fs-xs);color:var(--text-3)}
+#tourPop .trow{display:flex;gap:8px;justify-content:flex-end}
+@media (prefers-reduced-motion:reduce){#tourHole{transition:none}}

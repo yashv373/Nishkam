@@ -71,7 +71,7 @@ window.require(["vs/editor/editor.main"], () => {
 // ---------- problem list + statement ----------
 function renderList() {
   const groups = { rtl: "RTL · runs in your browser", flow: "Physical design · runs on your machine" };
-  $("list").innerHTML = Object.entries(groups).map(([kind, label]) =>
+  $("list").innerHTML = `<div class="solvedcount">${[...solved].filter((id) => PROBLEMS.some((p) => p.id === id)).length} of ${PROBLEMS.length} solved</div>` + Object.entries(groups).map(([kind, label]) =>
     `<h3>${label}</h3>` + PROBLEMS.filter((p) => p.kind === kind).map((p) =>
       `<button class="prob ${p === current ? "active" : ""}" data-id="${p.id}">
          <span class="check">${solved.has(p.id) ? "✓" : ""}</span>${esc(p.title)}
@@ -92,6 +92,35 @@ function openProblem(p) {
   editor.setValue(store.get(codeKey(p), p.starter));
   $("result").innerHTML = `<p class="muted">${p.kind === "rtl" ? "Write your design, then Submit." : "Pick your knobs, then Run flow."}</p>`;
   renderList(); renderButtons();
+}
+
+const solvedN = () => PROBLEMS.filter((p) => solved.has(p.id)).length;
+// next unsolved problem in list order (RTL group first, as shown), after the current one, wrapping around
+function nextUnsolved() {
+  const order = [...PROBLEMS.filter((p) => p.kind === "rtl"), ...PROBLEMS.filter((p) => p.kind === "flow")];
+  const i = order.indexOf(current);
+  return [...order.slice(i + 1), ...order.slice(0, i)].find((p) => !solved.has(p.id));
+}
+function nextStep() {
+  const n = nextUnsolved();
+  return n ? `<button class="primary next" id="nextBtn">Next problem: ${esc(n.title)} →</button>` : `<span class="muted">That is every problem. Well done.</span>`;
+}
+function wireNext() { const n = nextUnsolved(); if ($("nextBtn")) $("nextBtn").onclick = () => { openProblem(n); $("statement").scrollIntoView({ block: "start" }); }; }
+
+// Plain-words reading of a Yosys compile error. Keeps file:line, adds one line of explanation.
+function explainError(log, fallback) {
+  const m = log.match(/(?:^|\n)\s*(?:ERROR:\s*)?(\S+\.v):(\d+)(?:\.\d+-\d+(?:\.\d+)?)?:?\s*(?:ERROR:)?\s*(.*)/);
+  const raw = (m && m[3]) || fallback || "";
+  const where = m ? `${m[1]} line ${m[2]}` : "";
+  let why = "The checker could not read your code.";
+  if (/syntax error/i.test(raw)) why = "There is a typing mistake here. Look for a missing semicolon, a missing end, or an extra bracket on or just above this line.";
+  else if (/Module `?.*is not part of the design|Module `.*' referenced.*not found|Can't find/i.test(raw)) why = "A module name is missing or misspelled. Keep the module name from the starter.";
+  else if (/not declared|Identifier .* is implicitly declared|Unknown identifier|Reference to undeclared/i.test(raw)) why = "A name is used but never declared. Check for a spelling mistake.";
+  else if (/Re-definition|redeclar/i.test(raw)) why = "The same name is declared twice.";
+  else if (/port/i.test(raw)) why = "The ports do not match the starter. Keep the port names and widths the same.";
+  return `<div class="banner bad">Your code has an error${where ? ` at <code>${esc(where)}</code>` : ""}
+      <small>${why}</small></div>
+    <details><summary class="muted">Details (raw checker text)</summary><pre class="log">${esc(fallback && !log.includes(fallback) ? fallback + "\n" + log : log || fallback)}</pre></details>`;
 }
 
 function renderButtons() {
@@ -115,29 +144,37 @@ $("submit").onclick = () => {
 async function submitRtl() {
   const p = current, code = editor.getValue();
   busy = true; renderButtons();
-  $("result").innerHTML = `<p class="muted" id="status">Checking…</p><div class="progress"><div id="bar"></div></div>`;
+  $("result").innerHTML = `<p class="muted" id="status">Checking your design… (the very first check also downloads the checker, about 70 MB, once)</p><div class="progress"><div id="bar"></div></div>`;
   const res = await gradeInWorker(p, code, (f) => {
     if ($("bar")) $("bar").style.width = (f * 100).toFixed(0) + "%";
-    if ($("status") && f < 1) $("status").textContent = "Loading Yosys (first time only, ~70 MB)…";
+    if ($("status") && f < 1) $("status").textContent = `First check downloads the checker (about 70 MB, once): ${(f * 100).toFixed(0)}%. Later checks take a few seconds.`;
   });
   busy = false; renderButtons();
   if (p !== current) return;
   if (res.passed) {
     solved.add(p.id); store.set("solved", [...solved]); renderList();
     const kinds = res.stat?.kinds?.map(([k, n]) => `${n}× ${k}`).join(", ") || "";
-    $("result").innerHTML = `<div class="banner ok">Accepted
-        <small>Matches the reference for every input sequence up to ${DEPTH} cycles after reset.</small></div>
+    $("result").innerHTML = `<div class="banner ok big">✓ Accepted
+        <small>Matches the reference for every input sequence up to ${DEPTH} cycles after reset. ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
+      <p class="actions">${nextStep()}</p>
       ${res.stat?.cells ? `<p><b>${res.stat.cells}</b> generic cells after synthesis <span class="muted">(${esc(kinds)})</span></p>` : ""}
       <p><button id="harden" ${runnerInfo ? "" : "disabled"}>Take it to silicon (gf180)</button>
       <span class="muted">${runnerInfo ? "Runs LibreLane on your machine, about 2 minutes." : "Connect the local runner to place and route this design."}</span></p>
       <div id="flow"></div>`;
+    wireNext();
     $("harden").onclick = () => runFlow({ ...p, checks: null }, { [`${p.top}.v`]: code }, HARDEN_KNOBS, $("flow"));
   } else if (res.cex) {
-    $("result").innerHTML = `<div class="banner bad">Wrong answer
-        <small>Your outputs differ from the reference at cycle ${res.cex.first}. Inputs that lead there:</small></div>
-      ${cexTable(res.cex)}`;
+    const c = res.cex, o = c.outputs.find((o) => o.expected[c.first] !== "x" && o.expected[c.first] !== o.got[c.first]);
+    const what = o ? `Your design differs from the reference at cycle ${c.first} on output <code>${esc(o.name)}</code>: expected ${esc(o.expected[c.first])}, yours gave ${esc(o.got[c.first] || "nothing")}.`
+      : `Your design differs from the reference at cycle ${c.first}.`;
+    $("result").innerHTML = `<div class="banner bad">Wrong answer<small>${what}</small></div>
+      ${cexTable(c)}
+      <p class="actions"><button class="primary" id="again">Fix it and submit again</button>
+      <button id="spec">Show the spec</button></p>`;
+    $("again").onclick = () => editor.focus();
+    $("spec").onclick = () => $("statement").scrollIntoView({ block: "start", behavior: "smooth" });
   } else {
-    $("result").innerHTML = `<div class="banner bad">Couldn't grade this</div><pre class="log">${esc(res.error || res.log)}</pre>`;
+    $("result").innerHTML = explainError(res.log || "", res.error);
   }
 }
 
@@ -146,7 +183,7 @@ function cexTable(cex) {
   const cols = [...Array(n + 1).keys()];
   const head = `<tr><th></th>${cols.map((c) => `<th class="${c === cex.first ? "firstcol" : ""}">${c}</th>`).join("")}</tr>`;
   const row = (name, vals, cls = () => "") => `<tr><td class="name">${esc(name)}</td>${cols.map((c) =>
-    `<td class="${cls(c)}">${esc(vals[c] ?? "")}</td>`).join("")}</tr>`;
+    `<td class="${cls(c)}${cls(c) && c === cex.first ? " first" : ""}">${esc(vals[c] ?? "")}</td>`).join("")}</tr>`;
   const rows = [
     ...cex.inputs.map((i) => row(i.name, i.values)),
     ...cex.outputs.flatMap((o) => {
@@ -201,6 +238,7 @@ async function runFlow(p, files, knobs, target = $("result")) {
   const checks = (p.checks || []).map(([k, op, want, label]) => ({ label, v: m[k], ok: m[k] != null && OPS[op](m[k], want), rule: `${op} ${fmt(want)}` }));
   const allOk = s.state === "done" && checks.every((c) => c.ok);
   if (p.checks && allOk) { solved.add(p.id); store.set("solved", [...solved]); renderList(); }
+  setTimeout(() => { if (target.id === "result" && allOk) { target.insertAdjacentHTML("afterbegin", `<p class="actions">${nextStep()} <span class="muted">${solvedN()} of ${PROBLEMS.length} solved</span></p>`); wireNext(); } }, 0);
   const banner = s.state !== "done"
     ? `<div class="banner bad">Flow failed<small>LibreLane stopped early. The end of the log usually says why.</small></div>`
     : p.checks ? `<div class="banner ${allOk ? "ok" : "bad"}">${allOk ? "Accepted" : "Not yet"}<small>${allOk ? "Signs off within every limit." : "The flow finished, but some limits aren't met."}</small></div>`

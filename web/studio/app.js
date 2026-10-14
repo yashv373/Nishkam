@@ -1,10 +1,11 @@
 // Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
 import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS } from "./stages.js";
-import { renderNavigator } from "./navigator.js";
+import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
 import { createProject } from "./files.js";
 import * as R from "./runner-client.js";
+import { createTour } from "./tour.js";
 import { sdc } from "./engines/opensta.js";
 
 const $ = (id) => document.getElementById(id);
@@ -133,6 +134,8 @@ function setState(id, st, info) {
   const prev = state[id]?.st;
   state[id] = { st, info: typeof info === "string" ? info : undefined, t: 0, t0: st === "running" ? Date.now() : 0 };
   if (st === "running") for (const d of downstream(id)) if (["passed", "warn"].includes(state[d]?.st)) state[d].st = "stale";
+  if (st === "passed" || st === "warn") cons.settle(id);
+  if (st === "running" && HINT[id]) cons.log(id, `${byId(id).label}: ${HINT[id]}`);
   if (st === "passed" && prev === "running") { cons.log(id, `${byId(id).label} passed.`); }
   if (st === "unavailable") cons.log(id, `${byId(id).label}: ${info || "needs local runner"}`);
   drawNav(); setProgress();
@@ -440,6 +443,7 @@ async function runnerJob({ from, to, ids }) {
 // ---------- run control ----------
 async function start(ids) {
   if (running || !ids.length) return;
+  hideGuide();
   running = true; abort = new AbortController(); planned = ids; frac = 0; applyFx();
   $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
   syncFromEditor(); cons.startTimer();
@@ -449,6 +453,7 @@ async function start(ids) {
     engine: loadEngine, runnerJob, local: pdLocal, localStage });
   running = false; abort = null; frac = 0; applyFx(); cons.stopTimer();
   $("stop").disabled = true; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = false);
+  if (res.ok) { setState("files", "passed", "ready"); setState("reports", "passed", "ready"); }   // the two collecting pages have nothing to run
   setProgress(); drawNav();
   const nav = $("nav").querySelector(".stage.st-passed:last-of-type"); if (res.ok && nav) { nav.classList.add("flash"); setTimeout(() => nav.classList.remove("flash"), 1300); }
 }
@@ -519,3 +524,13 @@ window.require(["vs/editor/editor.main"], () => {
 buildTabs(); buildProps(); drawNav(); showTab("Editor");
 addEventListener("pagehide", syncFromEditor);
 window.__studio = { start, plan, state, ctx };  // handy in devtools
+
+// ---------- first-time guide ----------
+function hideGuide() { $("guide").hidden = true; store.set("studio:guide", 1); }
+const tour = createTour({ onDone: () => { store.set("studio:tour", 1); hideGuide(); }, onRunAll: () => start(plan("all")) });
+if (!store.get("studio:tour", 0)) { $("guide").hidden = true; setTimeout(() => tour.start(), 600); }   // first visit: the tour leads, no second overlay
+else $("guide").hidden = !!store.get("studio:guide", 0);
+$("tourBtn").onclick = () => tour.start();
+CMDS.push(["Take the tour", () => tour.start()]);
+$("guideRun").onclick = () => start(plan("all"));
+$("guideX").onclick = hideGuide;

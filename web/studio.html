@@ -34,6 +34,7 @@
   <button id="stop" disabled>Stop</button>
   <button id="runnerChip" class="chip st-idle" title="Local runner"><i class="dot"></i><span id="runnerTxt">runner off</span></button>
   <button id="fx" title="Turn off blur and animation" aria-pressed="false">Low effects</button>
+  <button id="tourBtn" title="Take the tour" aria-label="Take the tour">?</button>
   <button id="theme" title="Theme">Theme</button>
   <button id="paletteBtn" title="Command palette">Ctrl+K</button>
 </header>
@@ -43,6 +44,17 @@
   <section id="center">
     <div id="tabs" class="glass" role="tablist"></div>
     <div id="views">
+      <div id="guide" class="glass" hidden>
+        <button id="guideX" aria-label="Close guide" title="Close">&times;</button>
+        <h3>Start here</h3>
+        <p>Studio takes a chip design from Verilog all the way to a layout, right in your browser. Nothing to install.</p>
+        <ol>
+          <li>Look at the example design in the editor.</li>
+          <li>Press Run All. The example takes about 30 seconds. It checks the code, builds gates (Yosys, the synthesis tool), places and routes them, and checks timing (OpenSTA).</li>
+          <li>Open the Layout, GDS and Timing tabs to see the result.</li>
+        </ol>
+        <button id="guideRun" class="primary">Run All</button>
+      </div>
       <div class="view" data-v="Editor"><div id="filebar"></div><div id="editor"></div></div>
       <div class="view" data-v="Schematic" hidden></div>
       <div class="view" data-v="Waveform" hidden></div>

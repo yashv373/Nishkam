@@ -13,7 +13,7 @@ export function createConsole({ logEl, msgEl, msgCount, filterEl, timerEl, shell
   }
   const schedule = () => { if (!dirty) { dirty = true; setTimeout(paint, 50); } };   // not rAF: it never fires in a background tab, so the log froze };
   function renderMsgs() {
-    const e = msgs.filter((m) => m.sev === "err").length, w = msgs.length - e;
+    const e = msgs.filter((m) => m.sev === "err").length, w = msgs.filter((m) => m.sev === "warn").length;
     msgCount.textContent = msgs.length ? `${e ? e + "E " : ""}${w ? w + "W" : ""}`.trim() : "0";
     msgCount.className = "count " + (e ? "err" : w ? "warn" : "");
     msgEl.replaceChildren(...msgs.slice(-500).map((m) => { const d = document.createElement("div"); d.className = "msg " + m.sev;
@@ -29,6 +29,8 @@ export function createConsole({ logEl, msgEl, msgCount, filterEl, timerEl, shell
       if (lines.length > CAP) lines.splice(0, lines.length - CAP);
       schedule(); renderMsgs();
     },
+    // a stage that passed recovered from its own tool errors (retries): keep them visible, stop counting them
+    settle(stage) { for (const m of msgs) if (m.stage === stage && m.sev === "err") m.sev = "info"; renderMsgs(); },
     clear() { lines.length = 0; msgs.length = 0; paint(); renderMsgs(); },
     setFilter(s) { filter = s || ""; filterEl.textContent = filter ? "stage: " + filter + "  (click to clear)" : "all stages"; paint(); },
     startTimer() { t0 = Date.now(); clearInterval(tick); tick = setInterval(() => { timerEl.textContent = ((Date.now() - t0) / 1000).toFixed(0) + " s"; }, 1000); },

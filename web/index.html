@@ -201,6 +201,7 @@ h2 span, h2 em { color: var(--muted); font-style: italic; }
 .reveal.in .flowt tbody tr:nth-child(10) { transition-delay: 0.80s; }
 .reveal.in .flowt tbody tr:nth-child(11) { transition-delay: 0.88s; }
 .reveal.in .flowt tbody tr:nth-child(12) { transition-delay: 0.96s; }
+.reveal.in .flowt tbody tr:nth-child(13) { transition-delay: 1.04s; }
 @media (prefers-reduced-motion: reduce) { .flowt tbody tr { opacity: 1; transform: none; transition: none; } }
 @media (max-width: 640px) { .flowt td:nth-child(3), .flowt th:nth-child(3) { display: none; } }
 
@@ -365,7 +366,7 @@ footer a:hover { color: var(--ink); }
     </div>
     <div class="two">
       <a class="glass reveal" href="app.html"><div class="label">Practice</div><h3>Problems to solve</h3><p>Write Verilog, press submit, and see right away whether it matches the reference. If not, you see the exact cycle where it differs.</p><span class="more">Start practicing →</span></a>
-      <a class="glass reveal" href="studio.html"><div class="label">Studio · v0.1</div><h3>A chip IDE in your browser</h3><p>Edit, simulate, synthesize and view your design as a schematic and a layout. For full place-and-route, connect a small helper on your own computer.</p><span class="more">Open Studio →</span></a>
+      <a class="glass reveal" href="studio.html"><div class="label">Studio · v0.1</div><h3>A chip IDE in your browser</h3><p>Edit, simulate, synthesize and view your design as a schematic and a layout. Place, route, timing and layout checks also run in the browser. For the real LibreLane flow with a clock tree, connect a small helper on your own computer.</p><span class="more">Open Studio →</span></a>
     </div>
   </div>
 </section>
@@ -383,7 +384,7 @@ footer a:hover { color: var(--ink); }
             <li class="on"><b>01</b><span>Write RTL</span><p>An editor with your design and its testbench, and one button to run the whole flow.</p></li>
             <li><b>02</b><span>See the schematic</span><p>Your Verilog drawn as logic, so you can check it is what you meant.</p></li>
             <li><b>03</b><span>Look at the layout</span><p>The finished GDS of tiny8, a small 8-bit CPU, on gf180mcuD, layer by layer.</p></li>
-            <li><b>04</b><span>Check the timing</span><p>Real OpenSTA results: slack for every path, at three corners.</p></li>
+            <li><b>04</b><span>Check the timing</span><p>Real OpenSTA results: slack for every path.</p></li>
           </ol>
           <div class="devstage">
             <div class="devframe glass" id="devframe">
@@ -494,7 +495,7 @@ footer a:hover { color: var(--ink); }
   <div class="wrap reveal">
     <div class="label">Nishkam Studio · v0.1</div>
     <h2>The flow, step by step.</h2>
-    <table class="flowt"><thead><tr><th>Stage</th><th>Tools</th><th>Runs in</th></tr></thead><tbody><tr><td>Lint</td><td>Yosys, Verilator (verilator-wasm)</td><td class="w">Browser</td></tr><tr><td>Simulation</td><td>Icarus Verilog</td><td class="w">Browser</td></tr><tr><td>Waveforms</td><td>Surfer</td><td class="w">Browser</td></tr><tr><td>Synthesis</td><td>Yosys + ABC, gf180mcu 7-track cells</td><td class="w">Browser</td></tr><tr><td>Schematic</td><td>netlistsvg + ELK</td><td class="w">Browser</td></tr><tr><td>Placement</td><td>graywolf (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Clock tree</td><td>OpenROAD TritonCTS via LibreLane</td><td class="w">Runner</td></tr><tr><td>Routing</td><td>qrouter (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Timing</td><td>OpenSTA via LibreLane</td><td class="w">Runner</td></tr><tr><td>DRC · GDS</td><td>Magic · KLayout via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>LVS</td><td>Netgen</td><td class="w">Browser · Runner</td></tr><tr><td>Layout view</td><td>KLayout (kwasm) 2D / 3D</td><td class="w">Browser</td></tr></tbody></table>
+    <table class="flowt"><thead><tr><th>Stage</th><th>Tools</th><th>Runs in</th></tr></thead><tbody><tr><td>Lint</td><td>Yosys, Verilator (verilator-wasm)</td><td class="w">Browser</td></tr><tr><td>Simulation</td><td>Icarus Verilog</td><td class="w">Browser</td></tr><tr><td>Waveforms</td><td>Surfer</td><td class="w">Browser</td></tr><tr><td>Synthesis</td><td>Yosys + ABC, gf180mcu 7-track cells</td><td class="w">Browser</td></tr><tr><td>Schematic</td><td>netlistsvg + ELK</td><td class="w">Browser</td></tr><tr><td>Placement</td><td>graywolf (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Clock tree</td><td>OpenROAD TritonCTS via LibreLane</td><td class="w">Runner</td></tr><tr><td>Routing</td><td>qrouter (qflow) · OpenROAD via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>Timing</td><td>OpenSTA, before layout and after routing (with wires from Magic) · OpenSTA via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>DRC · GDS</td><td>Magic · Magic, KLayout via LibreLane</td><td class="w">Browser · Runner</td></tr><tr><td>RC extraction</td><td>Magic (wires to SPEF, for timing)</td><td class="w">Browser</td></tr><tr><td>LVS</td><td>Netgen</td><td class="w">Browser · Runner</td></tr><tr><td>Layout view</td><td>KLayout (kwasm) 2D / 3D · Tiny Tapeout Explorer 3D</td><td class="w">Browser</td></tr></tbody></table>
     <p class="label" style="margin-top:18px">All open source. PDK: GlobalFoundries gf180mcuD. Runner = LibreLane on your machine.</p>
   </div>
 </section>
