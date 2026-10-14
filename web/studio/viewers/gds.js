@@ -35,6 +35,7 @@ export function mount(el, ctx) {
     <span class="vw-note vw-t"></span>
     <button class="vw-btn vw-fit">Fit</button>
     <button class="vw-btn vw-3d" title="KLayout viewer (2D/3D) in a frame">KLayout / 3D</button>
+    <button class="vw-btn vw-tt" title="Tiny Tapeout Explorer by A. Mordvintsev (3D, wire highlights). Runs locally, nothing uploaded">Tiny Tapeout Explorer (3D)</button>
   </div>
   <div class="vw-body">
     <div class="vw-side" style="width:190px"></div>
@@ -46,11 +47,19 @@ export function mount(el, ctx) {
   let curSrc = null, k3 = null; // curSrc: async () => ArrayBuffer of the shown GDS
   $(".vw-3d").onclick = async () => {
     const b = $(".vw-3d");
-    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; b.textContent = "KLayout / 3D"; return; }
+    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; $(".vw-3d").textContent = "KLayout / 3D"; $(".vw-tt").textContent = "Tiny Tapeout Explorer (3D)"; return; }
     if (!curSrc) return;
     const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0;z-index:5;background:#07080c";
     $(".vw-body").style.position = "relative"; $(".vw-body").appendChild(box);
     const m = await import("./gds3d.js"); k3 = m.mount(box, { getBuffer: curSrc, view: "3d" }); k3.box = box; b.textContent = "Back to 2D";
+  };
+  $(".vw-tt").onclick = async () => {
+    const b = $(".vw-tt");
+    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; $(".vw-3d").textContent = "KLayout / 3D"; b.textContent = "Tiny Tapeout Explorer (3D)"; return; }
+    if (!curSrc) return;
+    const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0;z-index:5;background:#07080c";
+    $(".vw-body").style.position = "relative"; $(".vw-body").appendChild(box);
+    const m = await import("./ttexplorer.js"); k3 = m.mount(box, { getBuffer: curSrc }); k3.box = box; b.textContent = "Back to 2D";
   };
   const side = $(".vw-side"), wrap = $(".vw-canvas"), cv = $("canvas"), g = cv.getContext("2d"), msg = $(".vw-msg"), xy = $(".vw-xy"), info = $(".vw-info");
 

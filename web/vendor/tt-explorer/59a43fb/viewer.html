@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiny Tapeout Explorer</title>
+    <style>
+        :root {
+            --bg-dark: #0a0a0a;
+            --panel-bg: rgba(10, 10, 10, 0.9);
+            --panel-border: #333;
+            --text-main: #e0e0e0;
+            --text-muted: #888;
+            --text-dim: #555;
+            --accent-green: #00ff00;
+            --accent-blue: #58a6ff;
+            --accent-orange: #ffa658;
+            --accent-red: #ff4444;
+            --accent-yellow: #ffff00;
+            --input-bg: #151515;
+            --btn-bg: #222;
+            --btn-hover: #333;
+            --font-mono: 'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+            --radius: 6px;
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: var(--bg-dark); 
+            color: var(--text-main); 
+            font-family: sans-serif;
+        }
+        
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        /* Layout Utilities */
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .flex-gap-small { gap: 4px; }
+        .flex-gap-med { gap: 8px; }
+        .flex-1 { flex: 1; }
+        .flex-center { align-items: center; }
+        .flex-between { justify-content: space-between; }
+        .flex-wrap { flex-wrap: wrap; }
+        .hidden { display: none !important; }
+
+        .m-0 { margin: 0 !important; }
+        .mb-2 { margin-bottom: 8px !important; }
+        .mb-4 { margin-bottom: 16px !important; }
+        .mt-4 { margin-top: 16px !important; }
+        .mt-2 { margin-top: 8px !important; }
+        .ml-2 { margin-left: 8px !important; }
+
+        /* Panels */
+        .panel {
+            position: absolute;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius);
+            padding: 0;
+            pointer-events: auto;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .panel-header {
+            font-weight: 600;
+            font-size: 11px;
+            color: var(--text-muted);
+            cursor: grab;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .panel-header:active { cursor: grabbing; }
+
+        .panel-content {
+            padding: 12px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex-grow: 1;
+        }
+
+        /* Forms & Inputs */
+        .control-group { margin-bottom: 16px; }
+        .control-group:last-child { margin-bottom: 0; }
+        
+        label { 
+            display: block; 
+            font-size: 10px; 
+            margin-bottom: 6px; 
+            color: var(--text-muted); 
+            text-transform: uppercase; 
+            letter-spacing: 0.02em;
+        }
+        
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            background: var(--input-bg);
+            color: var(--text-main);
+            border: 1px solid var(--panel-border);
+            padding: 6px 8px;
+            font-size: 12px;
+            border-radius: var(--radius);
+            box-sizing: border-box;
+            outline: none;
+            font-family: var(--font-mono);
+        }
+        input:focus, select:focus { border-color: var(--text-dim); }
+
+        /* Buttons */
+        button, .btn {
+            background: var(--btn-bg);
+            color: var(--text-main);
+            border: 1px solid var(--panel-border);
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: var(--radius);
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            user-select: none;
+            box-sizing: border-box;
+        }
+        button:hover { background: var(--btn-hover); border-color: #555; }
+        button:active { transform: translateY(1px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-sm { padding: 5px 10px; font-size: 11px; font-weight: 600; }
+        .btn-xs { padding: 4px 8px; font-size: 10px; font-weight: 600; }
+        .btn-full { width: 100% !important; }
+        
+        .btn-active { color: var(--accent-green) !important; border-color: var(--accent-green) !important; background: rgba(0, 255, 0, 0.05) !important; }
+        .btn-inactive { color: var(--text-dim) !important; border-color: var(--panel-border) !important; }
+        
+        .toggle-checkbox { display: none; }
+        .toggle-checkbox:checked + .btn { color: var(--accent-green) !important; border-color: var(--accent-green) !important; background: rgba(0, 255, 0, 0.05) !important; }
+
+        .btn-success { background: rgba(0, 255, 0, 0.2) !important; border-color: #080 !important; color: #fff !important; font-weight: 700; box-shadow: 0 0 10px rgba(0, 255, 0, 0.2); }
+        .btn-success:hover { background: rgba(0, 255, 0, 0.3) !important; }
+        
+        .btn-danger { background: rgba(200, 0, 0, 0.1); border-color: #800; color: #f66; }
+        .btn-danger:hover { background: rgba(200, 0, 0, 0.2); }
+
+        .btn-warning { background: rgba(200, 200, 0, 0.1); border-color: #880; color: #ff0; }
+        
+        .btn-close {
+            width: 18px; height: 18px; padding: 0; line-height: 1;
+            background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.2); 
+            color: var(--accent-red); font-size: 14px; border-radius: 4px;
+        }
+        .btn-close:hover { background: var(--accent-red); color: white; border-color: var(--accent-red); }
+
+        /* Sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #222;
+            border-radius: 2px;
+            outline: none;
+            margin: 12px 0;
+            display: block;
+            border: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px; height: 14px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #000;
+            box-sizing: border-box;
+            transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+        
+        /* Dual Slider */
+        .dual-slider-container { position: relative; width: 100%; height: 24px; margin: 4px 0; }
+        .dual-slider-track { position: absolute; top: 10px; left: 0; right: 0; height: 4px; background: #222; border-radius: 2px; }
+        .dual-slider-fill { position: absolute; top: 10px; height: 4px; background: var(--accent-green); border-radius: 2px; }
+        .dual-slider-input {
+            position: absolute; top: 12px; left: 0; width: 100%; height: 14px;
+            -webkit-appearance: none; 
+            appearance: none; 
+            background: none !important; pointer-events: none; margin: 0 !important;
+            border: none !important;
+            transform: translateY(-50%);
+        }
+        .dual-slider-input::-webkit-slider-thumb {
+            -webkit-appearance: none; pointer-events: auto;
+            width: 14px; height: 14px; background: var(--accent-green); border-radius: 50%;
+            border: 2px solid #000; cursor: pointer;
+            box-sizing: border-box;
+            z-index: 5;
+        }
+
+        /* Specific Panels */
+        #ui { top: 50px; left: 10px; width: 220px; max-height: calc(95vh - 50px); }
+        #circuitMonitor { top: 10px; right: 10px; width: 300px; max-height: 45vh; }
+        #vgaMonitor { top: 48vh; right: 10px; }
+        #logPanel { bottom: 10px; right: 10px; width: 600px; max-height: 300px; }
+        #helpPanel { top: 50px; left: 240px; width: 300px; max-height: 80vh; }
+        
+        #topMenu { position: absolute; top: 10px; left: 10px; z-index: 1000; display: flex; gap: 6px; }
+
+        /* Signal Monitor Elements */
+        .monitor-btn-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 8px; }
+        .monitor-btn { 
+            aspect-ratio: 1; display: flex; align-items: center; justify-content: center; 
+            font-size: 10px; font-weight: 600; border-radius: 4px; border: 1px solid var(--panel-border);
+            background: #111; color: var(--text-dim); cursor: pointer; transition: all 0.1s;
+            font-family: var(--font-mono);
+        }
+        .monitor-btn.state-low { background: #080c14; color: var(--accent-blue); border-color: #1a2a44; }
+        .monitor-btn.state-high { background: #1a1208; color: var(--accent-orange); border-color: #442a1a; }
+        .state-flipped { color: var(--accent-yellow); }
+        .monitor-btn.empty { opacity: 0.15; cursor: default; color: var(--text-dim); }
+        .monitor-special-row { 
+            gap: 4px; align-items: flex-start; margin-bottom: 2px;
+        }
+
+        .monitor-special-btn { 
+            height: 31px; padding: 0 8px; font-size: 10px; font-weight: 600; border-radius: 4px; 
+            display: flex; align-items: center; justify-content: center;
+            background: #111; border: 1px solid var(--panel-border); color: var(--text-dim); cursor: pointer; 
+            font-family: var(--font-mono); transition: all 0.1s; box-sizing: border-box;
+        }
+        .monitor-special-btn.state-low { background: #080c14; color: var(--accent-blue); border-color: #1a2a44; }
+        .monitor-special-btn.state-high { background: #08140c; color: var(--accent-green); border-color: #1a442a; }
+        .monitor-special-btn.state-off-red { background: #140808; color: #ff4444; border-color: #441a1a; }
+        .monitor-special-btn.state-flipped { color: var(--accent-yellow); }
+
+        .monitor-group-label { 
+            font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin: 6px 0 3px 0; 
+            display: flex; justify-content: space-between; align-items: baseline;
+        }
+        .monitor-hex-val { font-family: var(--font-mono); color: var(--text-muted); font-size: 12px; text-transform: none; }
+
+        /* Layers List */
+        .layer-badge {
+            display: inline-flex; align-items: center; font-size: 10px;
+            padding: 3px 8px; margin: 2px; background: #111;
+            border-radius: 4px; border: 1px solid var(--panel-border); cursor: default;
+        }
+        .layer-badge.hidden-layer { opacity: 0.3; background: transparent; }
+        .layer-color { width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; }
+
+        /* Log */
+        #logContainer {
+            font-family: var(--font-mono); font-size: 11px; white-space: pre-wrap; 
+            color: var(--accent-green); margin: 0; line-height: 1.4;
+        }
+        
+        #loading { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 18px; font-weight: 500; font-family: var(--font-mono);
+            color: var(--accent-green); pointer-events: none; z-index: 1000;
+            background: rgba(0,0,0,0.9); padding: 20px 40px; border-radius: 50px;
+            border: 1px solid var(--accent-green);
+        }
+
+        /* Scrollbars */
+        .panel-content::-webkit-scrollbar { width: 4px; }
+        .panel-content::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+        .panel-content::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        details { border-top: 1px solid #222; margin-top: 12px; }
+        summary { font-size: 10px; color: var(--text-dim); cursor: pointer; text-transform: uppercase; padding: 8px 0; outline: none; }
+        summary:hover { color: var(--text-muted); }
+
+        /* Waypoints */
+        #wpList {
+            font-size: 10px; color: var(--text-dim); margin-top: 8px; 
+            max-height: 60px; overflow-y: auto; border-top: 1px solid var(--panel-border); 
+            padding-top: 4px;
+        }
+
+        /* Circuit Controls Extra Styling */
+        .circuit-controls-active {
+            padding: 10px 12px 0 12px; flex-grow: 0; 
+            border-bottom: 1px solid var(--panel-border);
+        }
+        .monitor-controls-group {
+            background: #111;
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 4px;
+        }
+        .sim-speed-val { color: var(--accent-orange); font-family: var(--font-mono); font-size: 11px; }
+
+        .waiting-text { padding: 12px; color: var(--text-dim); font-size: 12px; text-align: center; }
+
+        /* VGA Canvas */
+        #vgaCanvas { image-rendering: pixelated; }
+        #vgaMonitorContent { background: #000; position: relative; overflow: hidden; }
+        .tree-list-wrapper { width: 100%; overflow-x: auto; scrollbar-width: thin; }
+        #treeSelect { width: auto; min-width: 100%; }
+        #treeSelect option { white-space: nowrap; padding-right: 20px; }
+
+        /* Instant Tooltips */
+        .instant-tooltip {
+            position: fixed;
+            background: #222;
+            color: #eee;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            pointer-events: none;
+            z-index: 2000;
+            border: 1px solid #444;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: none;
+            white-space: pre-wrap;
+            max-width: 200px;
+            line-height: 1.4;
+        }
+        /* Seven Segment Display */
+        .seven-seg-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            min-width: 40px;
+        }
+        .seven-seg-display {
+            width: 30px;
+            height: 44px;
+            transform: skewX(-8deg);
+        }
+        .segment {
+            fill: #222;
+            transition: fill 0.1s, filter 0.1s;
+        }
+        .segment.on {
+            fill: var(--accent-red);
+            filter: drop-shadow(0 0 4px var(--accent-red));
+        }
+    </style>
+</head>
+<body>
+    <div id="tooltip" class="instant-tooltip"></div>
+    <div id="loading">Loading...</div>
+    <canvas id="glcanvas"></canvas>
+
+    <div id="topMenu">
+        <button id="toggleUiBtn" class="btn-sm btn-active">Controls</button>
+        <button id="toggleMonitorBtn" class="btn-sm btn-inactive">Monitor</button>
+        <button id="toggleVgaBtn" class="btn-sm btn-inactive">VGA</button>
+        <button id="toggleLogBtn" class="btn-sm btn-inactive">Log</button>
+        <button id="toggleHelpBtn" class="btn-sm btn-inactive">Help</button>
+    </div>
+
+    <div id="ui" class="panel">
+        <div class="panel-header">
+            <span>Controls</span>
+            <button id="close-ui" class="btn-close">×</button>
+        </div>
+        <div class="panel-content">
+            <div class="control-group flex flex-gap-small">
+                <button id="btnReset" class="flex-1">Reset View</button>
+                <button id="btnDownload" class="flex-1 btn-success">Download</button>
+            </div>
+            <div class="control-group">
+                <label>Highlight Trees</label>
+                <input type="text" id="treeSearch" placeholder="Search tree..." class="mb-4">
+                <div class="tree-list-wrapper">
+                    <select id="treeSelect" size="10" multiple></select>
+                </div>
+                <input type="text" id="treeIdList" placeholder="Tree IDs (e.g. 1, 2, 5-10)" class="mt-4">
+                <div class="flex flex-gap-small mt-4">
+                    <button id="btnHighlightIds" class="flex-1">Highlight</button>
+                    <button id="btnClearTrees" class="flex-1 btn-danger">Clear</button>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Layers / State Mix</label>
+                <input type="range" id="stateMixSlider" min="0" max="1" step="0.01" value="0">
+            </div>
+            <div class="control-group">
+                <label>Global Opacity</label>
+                <input type="range" id="alphaSlider" min="0.1" max="1.0" step="0.1" value="0.8">
+            </div>
+            <div class="control-group">
+                <label>Perspective</label>
+                <input type="range" id="perspSlider" min="0.0" max="1.0" step="0.01" value="0.5">
+            </div>
+            <div class="control-group">
+                <label>Explode Layers</label>
+                <input type="range" id="explodeSlider" min="1.0" max="20.0" step="0.1" value="1.0">
+            </div>
+            <div class="control-group">
+                <div class="flex flex-gap-small mb-2">
+                    <input type="checkbox" id="boundaryToggle" class="toggle-checkbox">
+                    <label for="boundaryToggle" class="btn flex-1" style="padding: 6px 2px; font-size: 10px; min-width: 0;">BOUNDARIES</label>
+                    <input type="checkbox" id="cellModeToggle" class="toggle-checkbox">
+                    <label for="cellModeToggle" class="btn flex-1" style="padding: 6px 2px; font-size: 10px; min-width: 0;">CELLS VIEW</label>
+                </div>
+                <input type="checkbox" id="powerNetToggle" class="toggle-checkbox" checked>
+                <label for="powerNetToggle" class="btn btn-full" style="padding: 8px; font-size: 11px;">POWER NETS</label>
+            </div>
+            <div class="control-group">
+                <label>Animation</label>
+                <div class="flex flex-gap-small mb-4">
+                    <button id="btnCaptWp" class="flex-1">Capture</button>
+                    <button id="btnClearWp" class="flex-1 btn-danger">Clear</button>
+                </div>
+                <div class="mb-4">
+                    <label>Transition (s)</label>
+                    <input type="number" id="animTime" value="2.0" step="0.5" min="0.5">
+                </div>
+                <button id="btnPlayAnim" class="btn-full btn-success">Play Sequence</button>
+                <div id="wpList">
+                    0 Waypoints
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Layer Z-Range</label>
+                <div class="dual-slider-container">
+                    <div class="dual-slider-track"></div>
+                    <div class="dual-slider-fill" id="layerRangeFill"></div>
+                    <input type="range" class="dual-slider-input" id="layerMinIdx" min="0" max="1" value="0">
+                    <input type="range" class="dual-slider-input" id="layerMaxIdx" min="0" max="1" value="1">
+                </div>
+                <div id="layerList" class="flex flex-wrap mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="circuitMonitor" class="panel">
+        <div class="panel-header">
+            <span>Circuit Monitor</span>
+            <button id="close-circuitMonitor" class="btn-close">×</button>
+        </div>
+        <div id="circuitControls" class="panel-content circuit-controls-active hidden">
+            <div class="monitor-controls-group">
+                <div class="flex flex-between flex-center mb-1">
+                    <label class="m-0">Speed</label>
+                    <span id="simSpeedLabel" class="sim-speed-val">READY</span>
+                </div>
+                <div class="flex flex-center flex-gap-med">
+                    <button id="btnPlayPause" class="btn-sm" style="width: 32px; height: 24px;">▶</button>
+                    <input type="range" id="simSpeed" min="1" max="100" value="50" class="flex-1 m-0">
+                </div>
+            </div>
+            <div class="monitor-controls-group mb-0">
+                <div class="flex flex-gap-med">
+                    <div class="flex-1">
+                        <div class="flex mb-2">
+                            <button id="autoClockToggle" class="monitor-special-btn state-high" style="flex: 1;">Auto Clock</button>
+                        </div>
+                        <div id="monitorSpecialSignals"></div>
+                    </div>
+                    <div id="sevenSegDisplay" class="seven-seg-container hidden" style="align-self: stretch; padding: 4px 6px; background: #000; border: 1px solid var(--panel-border);">
+                        <svg viewBox="0 0 40 60" class="seven-seg-display" style="height: 100%; width: 40px; min-height: 52px;">
+                            <path id="7seg-0" d="M 10 5 L 30 5 L 34 9 L 6 9 Z" class="segment" />
+                            <path id="7seg-1" d="M 35 10 L 35 28 L 31 24 L 31 14 Z" class="segment" />
+                            <path id="7seg-2" d="M 35 32 L 35 50 L 31 46 L 31 36 Z" class="segment" />
+                            <path id="7seg-3" d="M 10 55 L 30 55 L 34 51 L 6 51 Z" class="segment" />
+                            <path id="7seg-4" d="M 5 32 L 5 50 L 9 46 L 9 36 Z" class="segment" />
+                            <path id="7seg-5" d="M 5 10 L 5 28 L 9 24 L 9 14 Z" class="segment" />
+                            <path id="7seg-6" d="M 10 30 L 13 27 L 27 27 L 30 30 L 27 33 L 13 33 Z" class="segment" />
+                            <circle id="7seg-7" cx="35" cy="55" r="3" class="segment" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="circuitMonitorContent" class="panel-content" style="padding: 4px 12px 10px 12px;">
+            <div class="waiting-text">Waiting for netlist...</div>
+        </div>
+    </div>
+
+    <div id="vgaMonitor" class="panel">
+        <div class="panel-header">
+            <span>VGA Monitor</span>
+            <div class="flex flex-center flex-gap-med">
+                <span id="vgaRayPos" class="font-mono text-xs" style="color:var(--text-dim); margin-right: 8px;">Ray: 0,0</span>
+                <button id="scale-vga-05" class="btn-xs btn-active">0.5x</button>
+                <button id="scale-vga-10" class="btn-xs btn-inactive">1.0x</button>
+                <button id="close-vgaMonitor" class="btn-close ml-2">×</button>
+            </div>
+        </div>
+        <div id="vgaMonitorContent" class="panel-content">
+            <div id="vgaPlaceholder" class="text-dim text-xs" style="padding: 20px;">VGA not initialized</div>
+            <canvas id="vgaCanvas" width="800" height="525" class="hidden"></canvas>
+        </div>
+    </div>
+
+    <div id="logPanel" class="panel">
+        <div class="panel-header">
+            <span>System Log</span>
+            <button id="close-logPanel" class="btn-close">×</button>
+        </div>
+        <div class="panel-content">
+            <pre id="logContainer"></pre>
+        </div>
+    </div>
+
+    <div id="helpPanel" class="panel hidden">
+        <div class="panel-header">
+            <span>Help & Navigation</span>
+            <button id="close-helpPanel" class="btn-close">×</button>
+        </div>
+        <div class="panel-content" style="font-size: 16px; line-height: 1.5; color: var(--text-main);">
+            <div style="margin-bottom: 8px;"><strong style="color: var(--accent-green);">Camera Navigation:</strong></div>
+            <ul style="margin-top: 0; padding-left: 20px; color: var(--text-muted); margin-bottom: 12px;">
+                <li><strong>Left Click + Drag / Cmd + Swipe:</strong> Pan camera</li>
+                <li><strong>Right Click + Drag / Shift + Swipe or Drag:</strong> Rotate camera</li>
+                <li><strong>Middle Click + Drag / Scroll Wheel / Two-Finger Swipe / Pinch:</strong> Zoom in and out</li>
+            </ul>
+            <div style="margin-bottom: 8px;"><strong style="color: var(--accent-green);">Keyboard Shortcuts:</strong></div>
+            <ul style="margin-top: 0; padding-left: 20px; color: var(--text-muted);">
+                <li><kbd style="color: var(--accent-orange);">Space</kbd>: Step simulation forward</li>
+                <li><kbd style="color: var(--accent-orange);">C</kbd>: Toggle clock signal ('clk')</li>
+                <li><kbd style="color: var(--accent-orange);">P</kbd>: Play / Pause animation sequence</li>
+                <li><kbd style="color: var(--accent-orange);">↑ / ↓</kbd>: Navigate selected tree list</li>
+            </ul>
+        </div>
+    </div>
+
+    <script type="module" src="web/main.js"></script>
+</body>
+</html>
