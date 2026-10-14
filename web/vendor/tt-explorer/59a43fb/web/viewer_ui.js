@@ -38,8 +38,8 @@ export function initViewerUI(viewer) {
         updatePanel(btnId, panelId, defaultVisible);
     };
 
-    togglePanel('toggleUiBtn', 'ui', true);
-    togglePanel('toggleMonitorBtn', 'circuitMonitor', true);
+    togglePanel('toggleUiBtn', 'ui', false); // Nishkam: collapsed by default (small frame)
+    togglePanel('toggleMonitorBtn', 'circuitMonitor', false); // Nishkam: hidden by default (gate-level sim, not useful for most designs)
     togglePanel('toggleVgaBtn', 'vgaMonitor', false); // Hide VGA by default
     togglePanel('toggleLogBtn', 'logPanel', true);
     togglePanel('toggleHelpBtn', 'helpPanel', false); // Help disabled by default

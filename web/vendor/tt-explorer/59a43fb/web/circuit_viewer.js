@@ -173,12 +173,12 @@ export class CircuitViewer {
             centerX: 0, centerY: 0, 
             log2zoom: 0, pan: 0, tilt: 0, perspective: 0.5,
             baseScale: 0.01,
-            rotateMode: false,
+            rotateMode: true, // Nishkam: left-drag rotates, Shift+drag pans
             globalAlpha: 0.8,
             showBoundaries: false,
             showPowerNets: true,
             stateMix: 0.0,
-            explode: 1.0,
+            explode: 3.0,
             renderMode: 'standard'
         };
         
@@ -312,7 +312,7 @@ export class CircuitViewer {
                 // Middle-click drag zooms
                 this.view.log2zoom -= dy * 5.0;
             } else {
-                const isRotate = (this.dragButton === 2) || e.shiftKey || this.view.rotateMode;
+                const isRotate = (this.dragButton === 2) || (this.view.rotateMode !== e.shiftKey);
                 this._handleMove(-dx, -dy, isRotate);
             }
             
@@ -346,8 +346,8 @@ export class CircuitViewer {
 
     resetView() {
         if (!this.isLoaded) return;
-        this.view.pan = 0; 
-        this.view.tilt = 0; 
+        this.view.pan = 0.35;
+        this.view.tilt = 0.9; 
         this.view.log2zoom = 0;
         this.view.centerX = (this.bounds.minX + this.bounds.maxX) / 2;
         this.view.centerY = (this.bounds.minY + this.bounds.maxY) / 2;
@@ -381,8 +381,8 @@ export class CircuitViewer {
 
     _handleMove(dx, dy, isRotate) {
         if (isRotate) {
-            this.view.pan -= dx * 2.0;
-            this.view.tilt -= dy * 2.0;
+            this.view.pan -= dx * 6.0;
+            this.view.tilt -= dy * 6.0;
         } else {
             const speed = Math.pow(2.0, -this.view.log2zoom) / this.view.baseScale;
             const s = Math.sin(-this.view.pan), c = Math.cos(this.view.pan);

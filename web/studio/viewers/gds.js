@@ -26,7 +26,7 @@ function makeEngine() {
 export function mount(el, ctx) {
   el.classList.add("vw-root");
   el.innerHTML = `
-  <div class="vw-bar">
+  <div class="vw-bar vw-gbar">
     <select class="vw-file" title="GDS file"></select>
     <input type="file" accept=".gds,.gdsii" hidden>
     <button class="vw-btn vw-open">Open .gds...</button>

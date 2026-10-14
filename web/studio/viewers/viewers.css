@@ -56,3 +56,4 @@ button.vw-tile{cursor:pointer}button.vw-tile:hover{border-color:var(--glow,#4a63
 
 .vw-bar{overflow-x:auto}.vw-bar>*{flex:none;white-space:nowrap}
 .vw-bar select{max-width:180px}
+.vw-bar.vw-gbar{flex-wrap:wrap;overflow:visible}
