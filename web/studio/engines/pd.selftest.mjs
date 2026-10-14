@@ -3,6 +3,7 @@
 // Known issues printed, not hidden: a 4-cell design hangs graywolf (also natively), so the default is 8 flops.
 import * as P from "./place.worker.js";
 import * as R from "./route.worker.js";
+import * as C from "./cts.worker.js";
 import * as M from "./magic.worker.js";
 process.on("unhandledRejection", () => {}); // Asyncify rethrows ExitStatus after exit(); harmless
 
@@ -19,7 +20,10 @@ let t0 = Date.now();
 const pl = await P.handle({ files: { [`${top}.v`]: netlist }, options: { top } }, io);
 t("place", pl.ok && pl.summary.components >= bits, `${pl.summary.components} components, ${pl.summary.die}, ${Date.now() - t0} ms`);
 t0 = Date.now();
-const rt = await R.handle({ files: pl.files, options: { top } }, io);
+const ct = await C.handle({ files: { [`${top}.def`]: pl.files[`${top}.def`], "constraints.sdc": "create_clock -name clk -period 40 [get_ports clk]\n" }, options: { top } }, io);
+t("cts", ct.summary.clkbufs > 0 && ct.summary.sinks === bits, `${ct.summary.clkbufs} clock buffers, ${ct.summary.sinks} sinks, latency ${ct.summary.latency_ns} ns, ${Date.now() - t0} ms`);
+t0 = Date.now();
+const rt = await R.handle({ files: { ...pl.files, [`${top}.def`]: ct.files[`${top}.def`] }, options: { top } }, io);
 t("route", rt.ok && rt.summary.failedNets === 0, `failed nets ${rt.summary.failedNets}, ${Date.now() - t0} ms`);
 t0 = Date.now();
 const mg = await M.handle({ files: rt.files, options: { top, extract: true } }, io);

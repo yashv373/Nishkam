@@ -32,15 +32,15 @@ you need to continue without asking the owner to explain again.
   each, and `viewers/` the layout (DEF), GDS, timing and report views. Third-party builds are in `web/vendor/<tool>/<version>/`
   and their licences in `web/vendor/THIRD_PARTY.md`.
   - In the browser (WebAssembly, no install): lint (Yosys, Verilator via verilator-wasm), simulation (Icarus),
-    synthesis (Yosys + a trimmed gf180 liberty), timing and power estimate (our own JS static timing on gf180 liberty
-    tables; matches OpenSTA setup/hold slack on test designs), schematic (netlistsvg), waveforms (Surfer), placement
-    (graywolf), routing (qrouter), GDS + DRC + extraction (Magic), LVS (Netgen). No OpenROAD (no WASM build), no clock tree.
+    synthesis (Yosys + a trimmed gf180 liberty), timing and power (OpenSTA built to WASM, one corner on gf180 liberty
+    tables), schematic (netlistsvg), waveforms (Surfer), placement
+    (graywolf), routing (qrouter), GDS + DRC + extraction (Magic), LVS (Netgen, with a one-line use-after-free fix in netcmp.c; see its SOURCE.md), clock tree (OpenROAD TritonCTS built to WASM, `web/vendor/openroad-cts/`; tiny8 matches native OpenROAD exactly). No other OpenROAD steps in the browser.
   - With the local runner connected, the physical stages run real LibreLane in the container instead
     (Properties → Physical engine: Automatic / Runner / In browser). Runner v0.2 runs one stage or a range
     (LibreLane `-F`/`-T`), streams the log, and serves metrics/files. Optional shell: `--allow-shell`, off by default.
     `start-runner.bat` prints a Studio link and a Practice link.
   - Tests: `node web/studio/stages.test.mjs`, `node web/studio/engines/selftest.node.mjs`,
-    `node web/studio/engines/pd.selftest.mjs 8`, `node web/studio/engines/lvs.selftest.mjs`,
+    `node web/studio/engines/pd.selftest.mjs 8`, `node web/studio/engines/lvs.selftest.mjs`, `node web/studio/engines/cts.selftest.mjs`,
     `node web/studio/viewers/parse.test.mjs`, `node web/studio/viewers/gds.test.mjs`. Browser self-tests:
     `web/studio/engines/selftest.html`, `web/studio/viewers/harness.html`.
 - **Physical design problems** run on the user's machine, like Colab's "connect to a local runtime".
@@ -107,7 +107,7 @@ Open items:
   used for hiring or data licensing.
 - Make `squeeze-tiny8` harder: measure the smallest die that passes signoff and set the limit near it.
 - Add more problems, especially STA / CDC / physical design ones. Those are the main difference from competitors.
-- Studio: add a clock tree path for the in-browser flow (currently none). Check the in-browser timing against
+- Studio: check the in-browser timing against
   OpenSTA on more designs before trusting it beyond the test set.
 - When a page looks broken in a browser screenshot, check whether it is just mid-animation (reveal on scroll,
   hero fade-in) before changing code.

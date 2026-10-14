@@ -94,6 +94,5 @@ Add an entry to `web/problems.js` with a statement, starter code and a reference
 - Reference answers are sent to the browser, so a determined user can read them. Grading has to move to a server before results count for hiring.
 - The RTL check tries a full proof (induction) first. If the proof cannot be completed, it checks the first 40 cycles after reset and the result says so; a bug that only shows up later could then be missed. All current problems are fully proved.
 - The local helper runs one job at a time.
-- Studio's in-browser timing is real OpenSTA. It uses one corner (tt_025C_5v00) and an ideal clock, so hold and skew numbers are not meaningful there.
-- Studio's in-browser flow has no clock tree yet (a browser port of OpenROAD's TritonCTS is in progress). With the local runner, LibreLane builds a real clock tree.
+- Studio's in-browser timing is real OpenSTA. It uses one corner (tt_025C_5v00). Before layout the clock is ideal; after routing it uses the real clock tree built in the browser by OpenROAD TritonCTS.
 - In-browser placement and routing (graywolf, qrouter) do not look at timing, so results differ from an OpenROAD run.

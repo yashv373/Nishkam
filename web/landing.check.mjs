@@ -8,7 +8,7 @@ const hasLocal = (id) => new RegExp(`id === "${id}"`).test(lsBody) && !new RegEx
 const hasRunner = (id) => new RegExp(`id: "${id}"[^}]*where: "runner"`).test(stages);
 const f = (n) => existsSync(new URL("studio/engines/" + n, dir));
 // row -> [stage id, extra files that must exist if the row says Browser]
-const want = { "Placement": ["place", "place.js"], "Clock tree": ["cts"], "Routing": ["route", "route.js"], "Timing": ["sta", "opensta.js"], "DRC · GDS": ["signoff", "magic.js"], "RC extraction": [null, "spef.js"], "LVS": [null, "lvs.js"] };
+const want = { "Placement": ["place", "place.js"], "Clock tree": ["cts", "cts.js"], "Routing": ["route", "route.js"], "Timing": ["sta", "opensta.js"], "DRC · GDS": ["signoff", "magic.js"], "RC extraction": [null, "spef.js"], "LVS": [null, "lvs.js"] };
 const bad = [];
 for (const [row, [id, file]] of Object.entries(want)) {
   const txt = rows[row]; if (!txt) { bad.push(`row "${row}" missing from the tools table`); continue; }

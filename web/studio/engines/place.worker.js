@@ -183,6 +183,18 @@ export function place2def(top, files, fillCell, numLayersReq) {
   return { def: body + "\n", obs: obs.join("\n") + "\n", info: { scale, numlayers, oscale, pitchx, pitchy } };
 }
 
+// qflow addspacers: fill the gaps in the rows (rail and well continuity) and write the pin pads. Also used by the clock tree stage on its DEF.
+export async function fillDef({ top, def, obs, info, oscale, log, stripes }) {
+  const [lef, tlef] = await Promise.all([pdk("lef"), pdk("tlef")]);
+  const sp = await runTool(V.qf, "addspacers", [...(stripes !== true ? [] : ["-stripe", "2.5", "50.0", "PG"]), "-p", "VDD,VNW", "-g", "VSS,VPW", "-f", "gf180mcu_fd_sc_mcu7t5v0__fill", "-O",
+    "-l", PDK.tlef, "-l", PDK.lef, "-o", `${top}_filled.def`, top],
+    { [PDK.tlef]: tlef, [PDK.lef]: lef, [`${top}.def`]: def, [`${top}.obs`]: obs, [`${top}.info`]: info }, log, { quiet: true });
+  if (!sp.files[`${top}_filled.def`]) throw new Error("addspacers failed:\n" + sp.out);
+  // Pin pads: addspacers writes 0.28 x 0.28 um squares, below the 0.1444 um^2 minimum metal area (M2.3/M3.3). Make them 0.39 x 0.39 um.
+  const half = Math.round(oscale * 0.195);
+  return { def: text(sp.files[`${top}_filled.def`]).replace(/(\+ LAYER \S+ )\( -?\d+ -?\d+ \) \( \d+ \d+ \)/g, `$1( -${half} -${half} ) ( ${half} ${half} )`), obs: sp.files[`${top}.obsx`] || obs };
+}
+
 export async function handle({ files, options = {} }, { log, progress, raw }) {
   setRaw(raw);
   const nl = Object.keys(files).find((p) => /\.v$/.test(p));
@@ -193,7 +205,7 @@ export async function handle({ files, options = {} }, { log, progress, raw }) {
   let netText = text(files[nl]);
   const ncells = (netText.match(/^\s*gf180mcu_\w+\s+\S+\s*\(/gm) || []).length;
   if (ncells < 2) throw new Error(`Placement needs at least 2 cells (this netlist has ${ncells}); graywolf hangs on a single cell. Add logic, or use the local runner (LibreLane).`);
-  const pad = Math.max(0, 6 - ncells);
+  const pad = options.headroom ? 0 : Math.max(0, 6 - ncells);
   if (pad) {
     const i = netText.lastIndexOf("endmodule");
     netText = netText.slice(0, i) + Array.from({ length: pad }, (_, k) => `  gf180mcu_fd_sc_mcu7t5v0__fill_1 _nk_pad${k}_ ();`).join("\n") + "\n" + netText.slice(i);
@@ -202,6 +214,14 @@ export async function handle({ files, options = {} }, { log, progress, raw }) {
   const [lef, tlef, par] = await Promise.all([pdk("lef"), pdk("tlef"), pdk("par")]);
   const L = (s) => log(s);
   const t0 = Date.now();
+  if (options.headroom) {   // spare room for the clock tree: unconnected fill_1 cells make the die bigger; Clock Tree removes them again
+    const size = Object.fromEntries([...text(lef).matchAll(/MACRO (\S+)[\s\S]*?SIZE ([\d.]+) BY ([\d.]+)/g)].map((m) => [m[1], m[2] * m[3]]));
+    const area = [...netText.matchAll(/^\s*(gf180mcu_\w+)\s+\S+\s*\(/gm)].reduce((a, m) => a + (size[m[1]] || 0), 0);
+    const n = Math.ceil((options.headroom[0] * area + options.headroom[1]) / size.gf180mcu_fd_sc_mcu7t5v0__fill_1);
+    const i = netText.lastIndexOf("endmodule");
+    netText = netText.slice(0, i) + Array.from({ length: n }, (_, k) => `  gf180mcu_fd_sc_mcu7t5v0__fill_1 _nk_room${k}_ ();`).join("\n") + "\n" + netText.slice(i);
+    log(`added ${n} unconnected fill cells as room for the clock tree\n`);
+  }
 
   let r = await runTool(V.qf, "qrouter", ["-i", `${top}.info`, "-c", "boot.cfg"], { "boot.cfg": `lef ${PDK.tlef}\n`, [PDK.tlef]: tlef }, L, { quiet: true });
   const info = text(r.files[`${top}.info`] || "");
@@ -223,15 +243,10 @@ export async function handle({ files, options = {} }, { log, progress, raw }) {
   if (!g[`${top}.pl1`]) throw new Error("graywolf produced no placement");
 
   const p = place2def(top, { ".info": info, ".pl1": g[`${top}.pl1`], ".pl2": g[`${top}.pl2`], ".pin": g[`${top}.pin`] }, "gf180mcu_fd_sc_mcu7t5v0__fill_1", layers);
-  const sp = await runTool(V.qf, "addspacers", [...(options.stripes !== true ? [] : ["-stripe", "2.5", "50.0", "PG"]), "-p", "VDD,VNW", "-g", "VSS,VPW", "-f", "gf180mcu_fd_sc_mcu7t5v0__fill", "-O",
-    "-l", PDK.tlef, "-l", PDK.lef, "-o", `${top}_filled.def`, top],
-    { [PDK.tlef]: tlef, [PDK.lef]: lef, [`${top}.def`]: p.def, [`${top}.obs`]: p.obs, [`${top}.info`]: info }, L, { quiet: true });
-  if (!sp.files[`${top}_filled.def`]) throw new Error("addspacers failed:\n" + sp.out);
-  // Pin pads: addspacers writes 0.28 x 0.28 um squares, below the 0.1444 um^2 minimum metal area (M2.3/M3.3). Make them 0.39 x 0.39 um.
-  const half = Math.round(p.info.oscale * 0.195);
-  const filled = text(sp.files[`${top}_filled.def`]).replace(/(\+ LAYER \S+ )\( -?\d+ -?\d+ \) \( \d+ \d+ \)/g, `$1( -${half} -${half} ) ( ${half} ${half} )`);
+  const f = await fillDef({ top, def: p.def, obs: p.obs, info, oscale: p.info.oscale, log: L, stripes: options.stripes });
+  const filled = f.def;
   progress(1);
-  const out = { [`${top}.def`]: new TextEncoder().encode(filled), [`${top}.obs`]: sp.files[`${top}.obsx`] || p.obs, [`${top}.info`]: info,
+  const out = { [`${top}.def`]: new TextEncoder().encode(filled), [`${top}.obs`]: f.obs, [`${top}.info`]: info,
     [`${top}.pl1`]: g[`${top}.pl1`], [`${top}.cel`]: g[`${top}.cel`] };
   const comps = (text(out[`${top}.def`]).match(/^COMPONENTS (\d+)/m) || [])[1];
   return { ok: true, files: out, summary: { top, components: +comps, ms: Date.now() - t0, die: (text(out[`${top}.def`]).match(/DIEAREA.*/) || [""])[0] } };

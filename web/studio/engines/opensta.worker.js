@@ -17,12 +17,12 @@ async function load(url) {
 }
 
 // The exact SDC (also shown in the Timing tab). Delays default to 0 here; the page passes 20% of the period like LibreLane.
-export function sdc({ clockPort = "clk", periodNs = 10, inputDelayNs = 0, outputDelayNs = 0, loadPf = 0 }) {
+export function sdc({ clockPort = "clk", periodNs = 10, inputDelayNs = 0, outputDelayNs = 0, loadPf = 0, propagated = false }) {
   return `create_clock -name clk -period ${periodNs} [get_ports ${clockPort}]
 set_input_delay ${inputDelayNs} -clock clk [lsearch -all -inline -not -exact [all_inputs] [get_ports ${clockPort}]]
 set_output_delay ${outputDelayNs} -clock clk [all_outputs]
 set_load ${loadPf} [all_outputs]
-`;
+${propagated ? "set_propagated_clock [all_clocks]\n" : ""}`;
 }
 
 export function script(o, lib = "/w/lib.lib", v = "/w/design.v", spef = null) {

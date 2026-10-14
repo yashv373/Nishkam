@@ -1,6 +1,6 @@
 # Netgen (LVS), WebAssembly build
 
-- Upstream: https://github.com/RTimothyEdwards/netgen commit 3cb047b (v1.5.324), GPL (see LICENSE), source unmodified.
+- Upstream: https://github.com/RTimothyEdwards/netgen commit 3cb047b (v1.5.324), GPL (see LICENSE), with one fix in base/netcmp.c PropertyOptimize(): `plink = ptop; FREE(ptop); ptop = plink->next;` read `next` after free. glibc leaves it intact, emscripten's malloc does not, so LVS crashed ("memory access out of bounds") on designs with merged parallel devices, e.g. after CTS. The fix is `plink = ptop->next; FREE(ptop); ptop = plink;`.
 - Tcl 8.6.14 (tag core-8-6-14 of tcltk/tcl, BSD-style, see TCL_LICENSE) is linked in statically. Built with Magic's
   `toolchains/emscripten/build-tcl-wasm.sh --src=<tcl clone> --out=<dir>` with `--disable-threads` added to its configure line (the threaded notifier aborts under wasm) inside emscripten/emsdk:3.1.74.
   (Tcl 9 was not tried: netgen is written against the Tcl 8 API.)

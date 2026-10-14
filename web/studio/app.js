@@ -165,7 +165,7 @@ function emptyCard(el, title, text, demo, act) {
   if (act) { const b = document.createElement("button"); b.className = "primary"; b.textContent = act[0]; b.onclick = act[1]; c.append(b); }
   el.append(c);
 }
-const BNOTE = { Timing: "Browser timing: one corner (typical, 25 °C, 5 V) and an ideal clock (no clock tree), so hold and skew are approximate.",
+const BNOTE = { Timing: "Browser timing: one corner (typical, 25 °C, 5 V) and an ideal clock before layout and a real clock tree (OpenROAD TritonCTS) after routing. Wire delays come from Magic's extraction.",
   Layout: "Browser place and route (graywolf, qrouter) does not optimise for timing; results will differ from an OpenROAD run." };
 BNOTE.GDS = BNOTE.Layout;
 function bnote(t) {   // short grey note on browser-made results; runner / demo results stay unlabelled
@@ -213,7 +213,7 @@ const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) 
 const sum = { phys: {}, sta: {} };   // browser results for the Reports card: synth / timing / power
 // Timing needs a real STA tool. Nothing in the browser computes timing today (no home-made estimator).
 const NO_STA = "Run the Timing (STA) stage. OpenSTA runs here in your browser.";
-const STA_LABEL = { "pre-layout": "pre-layout (ideal clock, no wires)", "post-route": "post-route (wires from Magic extraction; no clock tree)" };
+const STA_LABEL = { "pre-layout": "pre-layout (ideal clock, no wires)", "post-route": "post-route (wires from Magic extraction; real clock tree from CTS)" };
 let wave = null;
 
 function physRows() {
@@ -284,7 +284,8 @@ function regBrowser(paths) {
   const old = ctx.getFile;
   if (!ctx.files.some((p) => p.startsWith("browser/"))) ctx.getFile = async (p) => (p.startsWith("browser/") ? (typeof outputs[p] === "string" ? outputs[p] : outputs[p].slice().buffer) : old(p));
   ctx.files = [...ctx.files.filter((p) => !paths.includes(p)), ...paths];
-  ctx.files.sort((x, y) => /^browser\/route\//.test(x) - /^browser\/route\//.test(y));   // viewer opens the last DEF: routed, not placed
+  const rank = (x) => (/^browser\/route\//.test(x) ? 2 : /^browser\/cts\//.test(x) ? 1 : 0);
+  ctx.files.sort((x, y) => rank(x) - rank(y));   // viewer opens the last DEF: routed, else clock tree, else placed
   for (const v of Object.values(viewers)) v.inst.update?.(ctx);
 }
 // Browser OpenSTA results -> Timing viewer (corners "pre-layout" / "post-route" in the report-path layout it already reads) + Reports cards.
@@ -303,7 +304,7 @@ function staShow(r, id) {
 async function onResult(id, r) {
   for (const [p, d] of Object.entries(r.files || {})) { outputs[p] = d; if (!artifacts.some((a) => a.name === p)) artifacts.push({ name: p, get: async () => outputs[p] }); }
   const sm = r.summary || {};
-  if (["place", "route", "signoff"].includes(id) && Object.keys(r.files || {}).some((p) => p.startsWith("browser/"))) {
+  if (["place", "cts", "route", "signoff"].includes(id) && Object.keys(r.files || {}).some((p) => p.startsWith("browser/"))) {
     sum.phys[id] = sm; regBrowser(Object.keys(r.files).filter((p) => p.startsWith("browser/")));
     showTab(id === "signoff" ? "GDS" : "Layout");
   }
@@ -349,8 +350,8 @@ const staOpts = () => {
   return { top: opts.top, clockPort: opts.clockPort, periodNs: p, inputDelayNs: d(opts.inDelay), outputDelayNs: d(opts.outDelay), loadPf: opts.loadPf === "" || opts.loadPf == null ? 0 : +opts.loadPf };
 };
 let staN = 0;
-async function staRun(key, files, io) {
-  const o = staOpts(), x = { key, label: STA_LABEL[key], sdc: sdc(o), n: ++staN };
+async function staRun(key, files, io, propagated = false) {
+  const o = { ...staOpts(), propagated }, x = { key, label: STA_LABEL[key], sdc: sdc(o), n: ++staN };
   try {
     const r = await (await import("./engines/opensta.js")).run({ files, options: o, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
     x.summary = r.summary;
@@ -361,34 +362,39 @@ async function staRun(key, files, io) {
 async function localStage(id, io) {
   const top = opts.top, need = (v, what) => { if (!v) throw new Error(`Run ${what} first.`); return v; };
   if (id === "floorplan") { io.onLog("Floorplan is part of Placement in the browser flow (the die is sized from the cells). " + NOT_LL); return { ok: true, info: "in placement" }; }
-  if (id === "cts") return { ok: true, state: "unavailable", info: "Clock tree: needs the local runner (OpenROAD) for now. A browser version is in progress." };
   if (id === "sta") {
     sum.sta = {};
     const { x, files } = await staRun("pre-layout", { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, io);
     if (x.error) io.onLog("ERROR: OpenSTA (" + x.key + "):\n" + x.error);
     return { ok: !x.error, files, staRuns: [x], summary: x.error ? { error: x.error.split("\n")[0] } : x.summary };
   }
-  const eng = { place: "place", route: "route", signoff: "magic" }[id];
+  const eng = { place: "place", cts: "cts", route: "route", signoff: "magic" }[id];
   const m = await import(`./engines/${eng}.js`);
   const a = { onLog: io.onLog, onProgress: io.onProgress, signal: io.signal };
   let r;
-  if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
-  else if (id === "route") r = await m.run({ ...a, files: need(PD.place, "Placement"), options: { top, timeoutS: opts.pdTimeout } });
+  if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout, headroom: [0.1, 600] } });
+  else if (id === "cts") {   // placed DEF + the same SDC as Timing -> DEF with the clock tree and a netlist that has the clock buffers
+    const pl = need(PD.place, "Placement");
+    r = await m.run({ ...a, files: { [top + ".def"]: pl[top + ".def"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), "constraints.sdc": sdc(staOpts()) }, options: { top, timeoutS: opts.pdTimeout } });
+  } else if (id === "route") r = await m.run({ ...a, files: { ...need(PD.place, "Placement"), ...PD.cts }, options: { top, timeoutS: opts.pdTimeout } });
   else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true, rc: true, timeoutS: opts.pdTimeout } });
   if (id === "route" && !r.ok && r.summary?.failedNets > 0) r.summary.error = routeMsg(r.summary);
   const sm = r.summary || {};
   if (id === "signoff" && r.ok) {   // LVS: Magic layout SPICE vs the Yosys gate netlist. A mismatch is a warning, not a crash.
     try {
-      const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
+      const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: PD.cts?.[top + "_cts.v"] || need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
       sm.lvs = l.summary; Object.assign(r.files, l.files);
     } catch (e) { sm.lvs = { error: e.message }; io.onLog("WARNING: LVS did not run: " + e.message); }
   }
-  if (r.ok) PD[id === "signoff" ? "magic" : id] = r.files;
+  if (r.ok) PD[id === "signoff" ? "magic" : id] = id === "cts" ? { [top + ".def"]: r.files[top + ".def"], [top + "_cts.v"]: r.files[top + "_cts.v"] } : r.files;
+  if (id === "place") delete PD.cts;   // a new placement makes the old clock tree stale
   const out = { ...r, files: pre(id, r.files) };
+  if (id === "cts") { delete out.files[`browser/cts/${top}_cts.v`]; out.files[`browser/cts/${top}.v`] = r.files[top + "_cts.v"]; }
   if (id === "signoff") {
     // post-route OpenSTA: the Yosys netlist (net names match the DEF/SPEF) + Magic's SPEF; same SDC as pre-layout. An error is shown as is, never replaced by numbers.
     const sp = r.files[top + ".spef"];
-    const p = sp ? await staRun("post-route", { [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), [top + ".spef"]: sp }, io)
+    const cn = PD.cts?.[top + "_cts.v"];   // netlist with the clock buffers: its names match the routed DEF and the SPEF
+    const p = sp ? await staRun("post-route", { [top + ".v"]: cn || need(outputs["netlist.v"], "Synthesis"), [top + ".spef"]: sp }, io, !!cn)
       : { x: { key: "post-route", label: STA_LABEL["post-route"], sdc: sdc(staOpts()), error: "Magic wrote no SPEF, so there are no extracted wires to give OpenSTA." }, files: {} };
     if (p.x.error) io.onLog("ERROR: OpenSTA (post-route):\n" + p.x.error);
     Object.assign(out.files, p.files); out.staRuns = [p.x];
