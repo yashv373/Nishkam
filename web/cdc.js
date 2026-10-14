@@ -122,7 +122,27 @@ export function injectSkew(json, top, an) {
     f1.c.connections.D = f1.c.connections.D.map((b) => (b === src ? mux : b));
   });
   m.ports.skew = { direction: "input", bits: skew };
-  return skew.length;
+  // Bus rule: a multi-bit bus that crosses may change at most one bit per source-clock event (Gray style).
+  // `old` above is the bus before its latest source edge, so the bits that differ are the bits that just changed.
+  const groups = {};
+  an.crossings.forEach(({ src }, i) => { const n = an.nm(src).replace(/\[\d+\]$/, ""); (groups[n] ||= []).push({ src, i }); });
+  const buses = [], hbus = [], hamm = [];
+  const gate = (name, type, A, B, Y) => { m.cells[`$bus_${name}`] = { type, parameters: {}, attributes: {}, port_directions: { A: "input", B: "input", Y: "output" }, connections: { A: [A], B: [B], Y: [Y] } }; return Y; };
+  let gi = 0;
+  for (const [name, bits] of Object.entries(groups)) {
+    if (bits.length < 2) continue;
+    const diff = bits.map(({ src, i }) => gate(`x${gi++}`, "$_XOR_", src, m.cells[`$skew_old${i}`].connections.Q[0], next++));
+    let bad = null;
+    for (let a = 0; a < diff.length; a++) for (let b = a + 1; b < diff.length; b++) {
+      const both = gate(`a${gi++}`, "$_AND_", diff[a], diff[b], next++);
+      bad = bad === null ? both : gate(`o${gi++}`, "$_OR_", bad, both, next++);
+    }
+    buses.push({ name, off: hbus.length, w: bits.length });
+    hbus.push(...bits.map((x) => x.src)); hamm.push(bad);
+  }
+  m.ports.hamm = { direction: "output", bits: hamm.length ? hamm : ["0"] };
+  m.ports.hbus = { direction: "output", bits: hbus.length ? hbus : ["0"] };
+  return { n: skew.length, buses };
 }
 
 // ---------- 3. run ----------
@@ -163,17 +183,32 @@ sat -verify -seq ${n} ${sets.join(" ")} -set proto 0 ${p.cdc.extra || ""} -prove
 }
 
 // Turn the failing run into the table the page already draws: every port per step, first = first bad step.
-export function cdcCounterexample(vcdText, p) {
+export function cdcCounterexample(vcdText, p, buses = []) {
   const { cycles, sigs } = parseVcd(vcdText);
   const fmt = (v) => (v === undefined ? "" : /[xz]/.test(v) ? "x" : String(parseInt(v, 2)));
   const get = (n) => sigs.find((s) => s.name === n || s.name === "in_" + n || s.name === "out_" + n);
   const rows = ["ena", "enb", ...p.cdc.show].map(get).filter(Boolean);
-  const failSig = get("fail"), bad = get(p.cdc.why ? "why" : "fail");
+  const failSig = get("fail");
   let first = -1;
   for (let c = 0; c < cycles && first < 0; c++) if (failSig && failSig.values[c] === "1") first = c;
   if (first < 0) first = cycles - 1;
   const reasons = p.cdc.reasons.filter(([sig]) => { const s = get(sig); return s && s.values[first] === "1"; }).map(([, t]) => t);
-  return { cycles, first, kind: "cdc", reasons, inputs: rows.map((s) => ({ name: s.name.replace(/^(in|out)_/, ""), values: s.values.map(fmt) })), outputs: [] };
+  const inputs = rows.map((s) => ({ name: s.name.replace(/^(in|out)_/, ""), values: s.values.map(fmt) }));
+  const hb = get("hbus"), hm = get("hamm");
+  buses.forEach((b, k) => {
+    // a bus is shown in binary, its bits as they leave the source flops
+    inputs.push({ name: b.name, values: hb.values.map((v) => v.padStart(hb.width, "0").slice(hb.width - b.off - b.w, hb.width - b.off)) });
+    if (hm && hm.values[first]?.padStart(hm.width, "0")[hm.width - 1 - k] === "1")
+      reasons.unshift(`the bus "${b.name}" changed more than one bit in a single source-clock event. A bus that crosses clocks must change one bit at a time (Gray code), because a flop that catches it mid-change can see any mix of old and new bits`);
+  });
+  return { cycles, first, kind: "cdc", reasons, inputs, outputs: [] };
+}
+
+// Add the bus rule to the problem's harness: DUT ports `hamm` / `hbus`, checked once the reset steps are over.
+function busHarness(h, buses) {
+  const B = Math.max(1, buses.length), W = Math.max(1, buses.reduce((a, b) => a + b.w, 0));
+  return h.replace(/output fail\);/, `output fail, output hamm_bad, output [${B - 1}:0] hamm, output [${W - 1}:0] hbus);\n  reg [1:0] rc = 0; always @(posedge gclk) if (rc != 3) rc <= rc + 1;\n  assign hamm_bad = (|hamm) & (rc >= 2);`)
+    .replace(/\bfail = /, "fail = hamm_bad | ").replace(".skew(skew)", ".skew(skew), .hamm(hamm), .hbus(hbus)");
 }
 
 export async function gradeCdc(runYosys, Exit, p, userCode, log = () => {}) {
@@ -203,16 +238,16 @@ write_json net.json
   res.timing.structureMs = Date.now() - t0;
   if (an.errors.length) { res.structural = an.errors; res.log = out.join(""); return res; }
   // 2. worst-case bit timing
-  const n = injectSkew(json, p.top, an);
+  const { n, buses } = injectSkew(json, p.top, an);
   const u = await run("unmap.ys", `read_json skew.json\ndffunmap\nwrite_json dut.json\n`, { "skew.json": JSON.stringify(json) });
   const flat = JSON.parse(txt(u.f["dut.json"]));
   const bad = toEvents(flat, p.top, an);
   if (bad) { res.structural = [bad]; res.log = out.join(""); return res; }
   const t1 = Date.now();
-  const r = await run("sat.ys", satScript(p, p.cdc.steps || CDC_STEPS), { "dut.json": JSON.stringify(flat), "tb.v": p.cdc.harness.replaceAll("{{N}}", n).replaceAll("{{TOP}}", p.top) });
+  const r = await run("sat.ys", satScript(p, p.cdc.steps || CDC_STEPS), { "dut.json": JSON.stringify(flat), "tb.v": busHarness(p.cdc.harness, buses).replaceAll("{{N}}", n).replaceAll("{{TOP}}", p.top) });
   res.skewBits = n; res.timing.satMs = Date.now() - t1; res.steps = p.cdc.steps || CDC_STEPS; res.log = out.join("");
   if (r.ok) { res.passed = true; }
-  else if (r.f && r.f["cex.vcd"]) res.cex = cdcCounterexample(txt(r.f["cex.vcd"]), p);
+  else if (r.f && r.f["cex.vcd"]) res.cex = cdcCounterexample(txt(r.f["cex.vcd"]), p, buses);
   else res.error = (res.log.match(/ERROR:.*$/m) || ["Yosys failed to run the timing check"])[0];
   return res;
 }

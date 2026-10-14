@@ -36,14 +36,12 @@ const CASES = [
     s = swap(s, "rq2 <= rq1;", "rq2 <= rq1; rq3 <= rq2;").replace("wq2 <= wq1;", "wq2 <= wq1; wq3 <= wq2;");
     return swap(swap(s, "{~rq2[2:1], rq2[0]}", "{~rq3[2:1], rq3[0]}"), "== wq2)", "== wq3)");
   })(), "pass"],
-  ["cdc-async-fifo", "binary pointers (2-flop sync per bit) - see note", (() => {
+  ["cdc-async-fifo", "binary pointers (2-flop sync per bit)", (() => {
     let s = swap(FIFO, "rq1 <= rgray;", "rq1 <= rbin;");
     s = swap(s, "wq1 <= wgray;", "wq1 <= wbin;");
     s = swap(s, "(wgray_n == {~rq2[2:1], rq2[0]})", "(wbin_n == {~rq2[2], rq2[1:0]})");
     return swap(s, "(rgray_n == wq2)", "(rbin_n == wq2)");
-  })(), "pass"],
-  // NOTE: the brief wanted this to FAIL. With a one-edge old/new skew, 2-flop binary pointers and registered flags
-  // stay safe (the wrong value is seen for one edge only, and the flags are rebuilt from the next one). See report.,
+  })(), "cex"],
   ["cdc-async-fifo", "pointers cross with one flop", swap(FIFO, "rempty_r <= (rgray_n == wq2);", "rempty_r <= (rgray_n == wq1);"), "struct"],
 
   ["cdc-pulse-sync", "reference (toggle, 2 flops + edge)", PULSE, "pass"],
