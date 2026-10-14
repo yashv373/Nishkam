@@ -5,6 +5,7 @@ import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
 import { createProject } from "./files.js";
 import * as R from "./runner-client.js";
+import { PROBLEMS } from "../problems.js";
 import { createTour } from "./tour.js";
 import { sdc } from "./engines/opensta.js";
 
@@ -34,6 +35,13 @@ $("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" 
 const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
   clockPeriod: 40, inDelay: "", outDelay: "", loadPf: 0.05, pdEngine: "auto", pdTimeout: 120, dieW: 170, dieH: 170, density: 50, congestion: false };
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
+// studio.html#demo=squeeze-tiny8 : the Practice page's "try it in the browser" link
+if (location.hash === "#demo=squeeze-tiny8") {
+  const t8 = PROBLEMS.find((x) => x.id === "squeeze-tiny8");
+  if (!project.get("tiny8.v")) project.add("tiny8.v", t8.files["tiny8.v"]);
+  Object.assign(opts, { top: "tiny8", tb: "", clockPeriod: 24, dieW: 134, dieH: 134, density: 80, pdEngine: "browser" });
+  store.set("studio:opts", opts);
+}
 const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
   { k: "simEngine", label: "Simulation engine", t: "select", o: [["icarus", "Icarus Verilog"], ["verilator", "Verilator (coming soon)", true]], st: ["sim"] },

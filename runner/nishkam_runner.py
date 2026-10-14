@@ -419,6 +419,9 @@ def selftest():
     files, cfg, rng = build_job(ok)
     assert cfg["DESIGN_NAME"] == "t" and cfg["CLOCK_PERIOD"] == 20 and cfg["VERILOG_FILES"] == ["dir::design.v"]
     assert rng == (None, None)
+    # squeeze-tiny8 job: fixed 24 ns clock, 134 x 134 um die at density 80 must be accepted as-is
+    _, cfg, _ = build_job({**ok, "knobs": {"CLOCK_PERIOD": 24, "DIE_AREA": [0, 0, 134, 134], "PL_TARGET_DENSITY_PCT": 80}})
+    assert cfg["CLOCK_PERIOD"] == 24 and cfg["DIE_AREA"] == [0, 0, 134, 134] and cfg["PL_TARGET_DENSITY_PCT"] == 80
     bad = [
         {**ok, "files": {"../x.v": ""}},                       # path traversal
         {**ok, "files": {"a.tcl": ""}},                        # not Verilog

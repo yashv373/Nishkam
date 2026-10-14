@@ -268,17 +268,20 @@ endmodule
 <p><code>tiny8</code> is a small 8-bit CPU with 48 flip-flops. It passes signoff on a 250 × 250 µm die in gf180mcuD, but most of that die is empty space.</p>
 <p>Shrink it. Choose the die size and placement density so that the design still passes signoff:</p>
 <ul>
-  <li>die area ≤ <b>30,000 µm²</b> (baseline: 62,500)</li>
+  <li>die area ≤ <b>19,000 µm²</b> (baseline: 62,500)</li>
   <li>0 routing DRC errors, 0 Magic DRC errors, 0 LVS errors</li>
-  <li>setup and hold slack ≥ 0 at a 40 ns clock</li>
+  <li>setup and hold slack ≥ 0 at a <b>24 ns</b> clock (fixed, you cannot change it)</li>
 </ul>
-<p>The RTL is fixed. You only edit the knobs. Runs on your machine through the local runner (about 2–3 minutes per try).</p>`,
+<p>The RTL is fixed. You only edit the knobs. Runs on your machine through the local runner (about 2–3 minutes per try).</p>
+<p><b>What changed:</b> the clock used to be 40 ns, where timing never mattered and only the cell area set the limit. At 24 ns the setup slack gets tight as the die shrinks, and the placement density now decides whether a small die passes. Die size and density pull against each other, so you have to tune both.</p>
+<p class="muted">Results come from your own machine and are not verified. This problem is for practice, not for ranking.</p>
+<p><a href="studio.html#demo=squeeze-tiny8" target="_blank" rel="noopener">Try it in the browser (approximate)</a>: opens Nishkam Studio with tiny8 loaded and the physical engine set to In browser. Browser place-and-route (graywolf, qrouter, Magic) is not timing-driven and is not LibreLane, so the numbers will differ and do not count for this problem. Studio needs a screen wider than 700 px.</p>`,
     files: { "tiny8.v": TINY8 },
     clock_port: "clk",
-    fixed_knobs: { CLOCK_PERIOD: 40 },
+    fixed_knobs: { CLOCK_PERIOD: 24 },
     starter: JSON.stringify({ DIE_AREA: [0, 0, 250, 250], PL_TARGET_DENSITY_PCT: 50 }, null, 2),
     checks: [
-      ["design__die__area", "<=", 30000, "die area µm²"],
+      ["design__die__area", "<=", 19000, "die area µm²"],
       ["route__drc_errors", "==", 0, "routing DRC"],
       ["magic__drc_error__count", "==", 0, "Magic DRC"],
       ["design__lvs_error__count", "==", 0, "LVS errors"],
