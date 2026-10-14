@@ -4,6 +4,8 @@
 // bound, and a failing run hands back the exact counterexample as a VCD.
 // Runs anywhere @yowasp/yosys runs (browser worker or Node).
 
+import { gradeCdc } from "./cdc.js";
+
 export const DEPTH = 40; // fallback bounded check, used only when the induction proof is inconclusive
 
 // induct=true: unbounded proof by temporal induction (up to 40 steps). Otherwise a plain DEPTH-cycle search.
@@ -84,6 +86,7 @@ export function parseStat(text) {
 
 // Run one grade. runYosys/Exit come from @yowasp/yosys.
 export async function grade(runYosys, Exit, problem, userCode, log = () => {}) {
+  if (problem.cdc) return gradeCdc(runYosys, Exit, problem, userCode, log);
   const out = [];
   const sink = (b) => { if (b) { const s = new TextDecoder().decode(b); out.push(s); log(s); } };
   const run = async (induct) => {
