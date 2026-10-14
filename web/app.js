@@ -158,10 +158,13 @@ async function submitRtl() {
         <small>${res.proved ? "Proved equal to the reference for all cycles after reset." : `Matches the reference for the first ${DEPTH} cycles after reset (a full proof was not possible).`} ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
       <p class="actions">${nextStep()}</p>
       ${res.stat?.cells ? `<p><b>${res.stat.cells}</b> generic cells after synthesis <span class="muted">(${esc(kinds)})</span></p>` : ""}
+      <p><button id="score">Score area and speed</button> <span class="muted">Downloads the synthesis and timing tools (cached after the first time).</span></p>
+      <div id="scoreOut"></div>
       <p><button id="harden" ${runnerInfo ? "" : "disabled"}>Take it to silicon (gf180)</button>
       <span class="muted">${runnerInfo ? "Runs LibreLane on your machine, about 2 minutes." : "Connect the local runner to place and route this design."}</span></p>
       <div id="flow"></div>`;
     wireNext();
+    $("score").onclick = () => runScore(p, code);
     $("harden").onclick = () => runFlow({ ...p, checks: null }, { [`${p.top}.v`]: code }, HARDEN_KNOBS, $("flow"));
   } else if (res.cex) {
     const c = res.cex, o = c.outputs.find((o) => o.expected[c.first] !== "x" && o.expected[c.first] !== o.got[c.first]);
@@ -176,6 +179,24 @@ async function submitRtl() {
   } else {
     $("result").innerHTML = explainError(res.log || "", res.error);
   }
+}
+
+// Area + speed with Studio's own Yosys and OpenSTA, loaded only when the button is pressed (keeps pass/fail and phones light).
+async function runScore(p, code) {
+  const out = $("scoreOut"), btn = $("score");
+  btn.disabled = true; out.innerHTML = `<p class="muted">Scoring… (synthesis, then timing)</p>`;
+  try {
+    const [{ scoreDesign, stretchResults, SCORE_NOTE }, Y, S] = await Promise.all([import("./score.js"), import("./studio/engines/yosys.js"), import("./studio/engines/opensta.js")]);
+    const sc = await scoreDesign(p.top, code, { synth: (r) => Y.run(r), sta: (r) => S.run(r) });
+    if (sc.error) throw new Error(sc.error);
+    const st = stretchResults(p.stretch, sc);
+    const mark = (label) => { const r = st.find((x) => x.label.startsWith(label)); return r ? ` <span class="${r.met ? "pass" : "fail"}">${r.met ? "stretch met" : "stretch not met"}: ${esc(r.label)}</span>` : ""; };
+    out.innerHTML = `<table class="metrics">
+      <tr><td>Area (gf180, ${sc.cells} cells)</td><td>${sc.areaUm2.toFixed(1)} µm²${mark("under")}</td></tr>
+      <tr><td>Max clock speed</td><td>${sc.fmaxMhz === null ? "no timing path" : `${sc.fmaxMhz} MHz (worst setup slack ${sc.slackNs} ns at 10 ns)`}${mark("at")}</td></tr></table>
+      <p class="muted">${esc(SCORE_NOTE)}</p>`;
+  } catch (e) { out.innerHTML = `<div class="banner bad">Could not score<small>${esc(e.message)}</small></div>`; }
+  btn.disabled = false;
 }
 
 function cexTable(cex) {

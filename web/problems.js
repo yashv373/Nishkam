@@ -73,6 +73,7 @@ export const PROBLEMS = [
     tags: ["RTL", "sequential"],
     kind: "rtl",
     top: "counter",
+    stretch: { areaUm2: 460 }, // reference measures 450 µm² on gf180 (score.test.mjs), plus 2%
     reset: { port: "rst", active: 1 },
     statement: `
 <p>Build a 4-bit up-counter.</p>
@@ -102,6 +103,7 @@ endmodule
     tags: ["RTL", "sequential"],
     kind: "rtl",
     top: "edge_detect",
+    stretch: { mhz: 600 }, // reference reaches 634 MHz (score.test.mjs), minus about 5%
     reset: { port: "rst", active: 1 },
     statement: `
 <p>Output a one-cycle pulse when input <code>d</code> goes from 0 to 1.</p>
