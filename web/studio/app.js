@@ -41,6 +41,7 @@ if (location.hash === "#demo=squeeze-tiny8") {
   if (!project.get("tiny8.v")) project.add("tiny8.v", t8.files["tiny8.v"]);
   Object.assign(opts, { top: "tiny8", tb: "", clockPeriod: 24, dieW: 250, dieH: 250, density: 50, pdEngine: "browser" });   // the problem's starting knobs, not the answer
   store.set("studio:opts", opts);
+  history.replaceState(null, "", location.pathname + location.search);   // apply once: a reload must not reset the user's knobs
 }
 const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
