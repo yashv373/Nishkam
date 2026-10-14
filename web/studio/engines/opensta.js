@@ -5,3 +5,4 @@ const url = new URL("./opensta.worker.js", import.meta.url);
 // options: {top, clockPort="clk", periodNs=10, inputDelayNs=0, outputDelayNs=0, loadPf=0}
 // -> files {timing.rpt, power.rpt}, summary {setup_ws_ns, setup_tns_ns, hold_ws_ns, hold_tns_ns, fmax_mhz, total_uW, ...}
 export const run = ({ files, options = {}, onLog, onProgress, signal }) => call(url, { files, options }, { onLog, onProgress, signal, timeoutMs: (options.timeoutS ?? 180) * 1000 });
+export { sdc } from "./opensta.worker.js";

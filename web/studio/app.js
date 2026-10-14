@@ -5,6 +5,7 @@ import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
 import { createProject } from "./files.js";
 import * as R from "./runner-client.js";
+import { sdc } from "./engines/opensta.js";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -30,7 +31,7 @@ $("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" 
 
 // ---------- options (Properties panel) ----------
 const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
-  clockPeriod: 40, pdEngine: "auto", pdTimeout: 120, dieW: 170, dieH: 170, density: 50, congestion: false };
+  clockPeriod: 40, inDelay: "", outDelay: "", loadPf: 0.05, pdEngine: "auto", pdTimeout: 120, dieW: 170, dieH: 170, density: 50, congestion: false };
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
 const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
@@ -40,6 +41,9 @@ const FIELDS = [
   { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
   { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "floorplan", "place", "cts", "sta"] },
   { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "floorplan", "cts", "sta"], rn: true },
+  { k: "inDelay", label: "Input delay (ns)", t: "number", ph: "empty = 20% of period", st: ["sta", "signoff"] },
+  { k: "outDelay", label: "Output delay (ns)", t: "number", ph: "empty = 20% of period", st: ["sta", "signoff"] },
+  { k: "loadPf", label: "Output load (pF)", t: "number", st: ["sta", "signoff"] },
   { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser: experimental (qflow tools on gf180)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"] },
   { k: "pdTimeout", label: "Browser step time limit (s)", t: "number", st: ["place", "route", "signoff"] },
   { k: "dieW", label: "Die width (um)", t: "number", st: ["floorplan", "place"], rn: true },
@@ -180,7 +184,7 @@ async function loadDemo() {
     const base = "./studio/demo/";
     ctx.metrics = parseLoose(await (await fetch(base + "final/metrics.json")).text());
     const fl = await (await fetch(base + "files.json")).json(); ctx.files = Array.isArray(fl) ? fl : fl.files || [];
-    ctx.source = "demo";
+    ctx.source = "demo"; ctx.staInfo = null;
     ctx.getFile = async (p) => { const r = await fetch(base + p); if (!r.ok) throw new Error("missing " + p);
       return /\.(gds|png|odb|oas|zip)$/i.test(p) ? r.arrayBuffer() : r.text(); };
     artifacts = ctx.files.map((n) => ({ name: n, get: () => ctx.getFile(n) }));
@@ -194,10 +198,10 @@ async function loadDemo() {
 // ---------- browser-engine outputs shown in tabs ----------
 const view = (n) => document.querySelector(`.view[data-v="${n}"]`);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const sum = { phys: {} };   // browser results for the Reports card: synth / timing / power
+const sum = { phys: {}, sta: {} };   // browser results for the Reports card: synth / timing / power
 // Timing needs a real STA tool. Nothing in the browser computes timing today (no home-made estimator).
-const NO_STA = "needs OpenSTA: coming to the browser; runs today on the local runner (LibreLane)";
-const OPENSTA_IN_BROWSER = false;   // flip to true once engines/opensta.js (OpenSTA WASM) ships; the sta stage then calls it
+const NO_STA = "Run Synthesis and then Timing (STA): OpenSTA runs in your browser. With a local runner connected, LibreLane's numbers are shown instead";
+const STA_LABEL = { "pre-layout": "pre-layout (ideal clock, no wires)", "post-route": "post-route (wires from Magic extraction; no clock tree)" };
 let wave = null;
 
 function physRows() {
@@ -226,12 +230,13 @@ function repCard() {
   const M = ctx.source === "runner" || ctx.source === "demo" ? ctx.metrics : null;   // only real LibreLane numbers
   const runnerTiming = () => M && M["timing__setup__ws"] != null && [["Setup worst slack", f(M["timing__setup__ws"], " ns", 3)], ["Setup TNS", f(M["timing__setup__tns"], " ns", 3)], ["Hold worst slack", f(M["timing__hold__ws"], " ns", 3)], ["Hold TNS", f(M["timing__hold__tns"], " ns", 3)]];
   const runnerPower = () => M && M["power__total"] != null && [["Total", f(M["power__total"] * 1e3, " mW", 4)], ["Leakage", f(M["power__leakage__total"] * 1e6, " µW", 4)], ["Internal", f(M["power__internal__total"] * 1e3, " mW", 4)], ["Switching", f(M["power__switching__total"] * 1e3, " mW", 4)]];
+  const staRows = (fn) => { const e = Object.entries(sum.sta); return e.length ? e.flatMap(([k, x]) => x.error ? [[k, "OpenSTA error, see the Timing tab"]] : fn(x.summary).map(([a, b]) => [k + " " + a, b])) : null; };
   const sy = sum.synth;
   c.replaceChildren(
     card("Synthesis report", sy && [["Cells", sy.cells ?? "n/a"], ["Area", f(sy.area, " µm²")], ...(sy.kinds || []).slice(0, 12).map(([k, n]) => [k, n])], "Run Synthesis to see cell count, area and cell kinds."),
-    card("Timing (OpenSTA via LibreLane)", runnerTiming(), NO_STA + "."),
+    card(M ? "Timing (OpenSTA via LibreLane)" : "Timing (OpenSTA in browser)", runnerTiming() || staRows((x) => [["setup worst slack", f(x.setup_ws_ns, " ns", 3)], ["setup TNS", f(x.setup_tns_ns, " ns", 3)], ["hold worst slack", f(x.hold_ws_ns, " ns", 3)], ["hold TNS", f(x.hold_tns_ns, " ns", 3)]]), NO_STA + "."),
     card("Physical (in browser, experimental). " + NOT_LL, physRows(), "Run Placement, Routing and Signoff with no runner connected (or pick Physical engine: In browser)."),
-    card("Power (via LibreLane)", runnerPower(), NO_STA + "."));
+    card(M ? "Power (via LibreLane)" : "Power (OpenSTA, default switching activity)", runnerPower() || staRows((x) => [["total", f(x.total_uW, " µW", 4)], ["internal", f(x.internal_uW, " µW", 4)], ["switching", f(x.switching_uW, " µW", 4)], ["leakage", f(x.leakage_uW, " µW", 4)]]), NO_STA + "."));
 }
 
 // Schematic: SVG in an <img>, wheel zoom + drag pan by CSS transform.
@@ -269,6 +274,19 @@ function regBrowser(paths) {
   ctx.files.sort((x, y) => /^browser\/route\//.test(x) - /^browser\/route\//.test(y));   // viewer opens the last DEF: routed, not placed
   for (const v of Object.values(viewers)) v.inst.update?.(ctx);
 }
+// Browser OpenSTA results -> Timing viewer (corners "pre-layout" / "post-route" in the report-path layout it already reads) + Reports cards.
+function staShow(r, id) {
+  for (const x of r.staRuns) sum.sta[x.key] = x;
+  const e = Object.entries(sum.sta);
+  if (!ctx.source || ctx.source === "browser") {
+    ctx.source = "browser";
+    ctx.metrics = Object.fromEntries(e.filter(([, x]) => x.summary).flatMap(([k, x]) => [[`timing__setup__ws__corner:${k}`, x.summary.setup_ws_ns], [`timing__hold__ws__corner:${k}`, x.summary.hold_ws_ns]]));
+    ctx.staInfo = Object.fromEntries(e.map(([k, x]) => [k, { label: x.label, sdc: x.sdc, error: x.error, n: x.n, power: x.summary && x.summary.total_uW }]));
+  }
+  const paths = Object.keys(r.files || {}).filter((p) => p.startsWith("browser/"));
+  if (id === "sta") { regBrowser(paths); showTab("Timing"); }
+  else for (const v of Object.values(viewers)) v.inst.update?.(ctx);
+}
 async function onResult(id, r) {
   for (const [p, d] of Object.entries(r.files || {})) { outputs[p] = d; if (!artifacts.some((a) => a.name === p)) artifacts.push({ name: p, get: async () => outputs[p] }); }
   const sm = r.summary || {};
@@ -277,6 +295,7 @@ async function onResult(id, r) {
     showTab(id === "signoff" ? "GDS" : "Layout");
   }
   if (id === "synth" && r.ok) sum.synth = sm;
+  if (r.staRuns) staShow(r, id);
   repCard();
   if (id === "schematic") {
     const svg = Object.entries(r.files || {}).find(([p]) => p.endsWith(".svg"));
@@ -310,14 +329,31 @@ const pre = (dir, files) => Object.fromEntries(Object.entries(files).map(([n, d]
 // qrouter names nets like the DEF: user names stay, yosys internals (_12_, $abc...) are called "internal net".
 const routeMsg = (s) => { const nm = (s.failedNames || []).map((n) => (/^[_$]/.test(n) ? "internal net" : n)), shown = [...new Set(nm)].slice(0, 6).join(", ");
   return `qrouter could not route ${s.failedNets} nets${shown ? " (" + shown + (nm.length > 6 ? ", ..." : "") + ")" : ""}; try a larger die or lower density, or use the local runner (LibreLane).`; };
+// SDC from Properties: delays default to 20% of the period like LibreLane.
+const staOpts = () => {
+  const p = +opts.clockPeriod; if (!(p > 0)) throw new Error("Set a clock period above 0 in Properties.");
+  const d = (v) => (v === "" || v == null ? +(p * 0.2).toFixed(4) : +v);
+  return { top: opts.top, clockPort: opts.clockPort, periodNs: p, inputDelayNs: d(opts.inDelay), outputDelayNs: d(opts.outDelay), loadPf: opts.loadPf === "" || opts.loadPf == null ? 0 : +opts.loadPf };
+};
+let staN = 0;
+async function staRun(key, files, io) {
+  const o = staOpts(), x = { key, label: STA_LABEL[key], sdc: sdc(o), n: ++staN };
+  try {
+    const r = await (await import("./engines/opensta.js")).run({ files, options: o, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
+    x.summary = r.summary;
+    const f = r.files, rd = `browser/sta/stapostpnr/${key}/`, ot = `browser/sta/${key}/`;
+    return { x, files: { [rd + "max.rpt"]: f["max.rpt"], [rd + "min.rpt"]: f["min.rpt"], [ot + "timing.rpt"]: f["timing.rpt"], [ot + "power.rpt"]: f["power.rpt"], [ot + "constraints.sdc"]: f["constraints.sdc"] } };
+  } catch (e) { if (e.name === "AbortError") throw e; x.error = e.message; return { x, files: {} }; }
+}
 async function localStage(id, io) {
   const top = opts.top, need = (v, what) => { if (!v) throw new Error(`Run ${what} first.`); return v; };
   if (id === "floorplan") { io.onLog("Floorplan is part of Placement in the browser flow (the die is sized from the cells). " + NOT_LL); return { ok: true, info: "in placement" }; }
   if (id === "cts") return { ok: true, state: "unavailable", info: "skipped (qflow has no clock tree; runner does real CTS)" };
   if (id === "sta") {
-    if (!OPENSTA_IN_BROWSER) return { ok: true, state: "unavailable", info: NO_STA };
-    const m = await import("./engines/opensta.js");   // hook: same engine shape as the others
-    return m.run({ files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, clockPort: opts.clockPort, periodNs: opts.clockPeriod }, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
+    sum.sta = {};
+    const { x, files } = await staRun("pre-layout", { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, io);
+    if (x.error) io.onLog("ERROR: OpenSTA (" + x.key + "):\n" + x.error);
+    return { ok: !x.error, files, staRuns: [x], summary: x.error ? { error: x.error.split("\n")[0] } : x.summary };
   }
   const eng = { place: "place", route: "route", signoff: "magic" }[id];
   const m = await import(`./engines/${eng}.js`);
@@ -325,7 +361,7 @@ async function localStage(id, io) {
   let r;
   if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
   else if (id === "route") r = await m.run({ ...a, files: need(PD.place, "Placement"), options: { top, timeoutS: opts.pdTimeout } });
-  else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true, timeoutS: opts.pdTimeout } });
+  else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true, rc: true, timeoutS: opts.pdTimeout } });
   if (id === "route" && !r.ok && r.summary?.failedNets > 0) r.summary.error = routeMsg(r.summary);
   const sm = r.summary || {};
   if (id === "signoff" && r.ok) {   // LVS: Magic layout SPICE vs the Yosys gate netlist. A mismatch is a warning, not a crash.
@@ -335,11 +371,18 @@ async function localStage(id, io) {
     } catch (e) { sm.lvs = { error: e.message }; io.onLog("WARNING: LVS did not run: " + e.message); }
   }
   if (r.ok) PD[id === "signoff" ? "magic" : id] = r.files;
+  const out = { ...r, files: pre(id, r.files) };
   if (id === "signoff") {
+    // post-route OpenSTA: the Yosys netlist (net names match the DEF/SPEF) + Magic's SPEF; same SDC as pre-layout. An error is shown as is, never replaced by numbers.
+    const sp = r.files[top + ".spef"];
+    const p = sp ? await staRun("post-route", { [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), [top + ".spef"]: sp }, io)
+      : { x: { key: "post-route", label: STA_LABEL["post-route"], sdc: sdc(staOpts()), error: "Magic wrote no SPEF, so there are no extracted wires to give OpenSTA." }, files: {} };
+    if (p.x.error) io.onLog("ERROR: OpenSTA (post-route):\n" + p.x.error);
+    Object.assign(out.files, p.files); out.staRuns = [p.x];
     const v = sm.lvs, lvs = !v || v.error ? "LVS not run" : v.match ? "LVS match" : "LVS MISMATCH";
-    if (sm.drcErrors > 0 || !v || v.error || !v.match) return { ...r, files: pre(id, r.files), state: "warn", info: `${sm.drcErrors} DRC tiles, ${lvs}` };
+    if (sm.drcErrors > 0 || !v || v.error || !v.match || p.x.error) { out.state = "warn"; out.info = `${sm.drcErrors} DRC tiles, ${lvs}${p.x.error ? ", post-route STA failed" : ""}`; }
   }
-  return { ...r, files: pre(id, r.files) };
+  return out;
 }
 // Which project files a stage reads: no testbenches, except the chosen one for simulation.
 const filesFor = (id) => Object.fromEntries(Object.entries(project.all()).filter(([n]) => !project.isTb(n) || (byId(id).src === "sim" && n === opts.tb)));
@@ -386,7 +429,7 @@ async function runnerJob({ from, to, ids }) {
   if (s.state === "done" || s.metrics) {
     try { ctx.metrics = await R.jobMetrics(jobId); } catch { ctx.metrics = s.metrics || null; }
     try { ctx.files = await R.jobFiles(jobId); } catch { ctx.files = []; }
-    const id = jobId; ctx.source = "runner"; ctx.getFile = (p) => R.jobFile(id, p, /\.(gds|png|odb|oas|zip)$/i.test(p));
+    const id = jobId; ctx.source = "runner"; ctx.staInfo = null; ctx.getFile = (p) => R.jobFile(id, p, /\.(gds|png|odb|oas|zip)$/i.test(p));
     artifacts = ctx.files.map((n) => ({ name: n, get: () => ctx.getFile(n) }));
     for (const v of Object.values(viewers)) v.inst.update?.(ctx);
   }

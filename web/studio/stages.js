@@ -10,7 +10,7 @@ export const STAGES = [
   { id: "place", label: "Placement", group: 3, where: "runner", tab: "Layout" },
   { id: "cts", label: "Clock Tree", group: 3, where: "runner", tab: "Layout" },
   { id: "route", label: "Routing", group: 3, where: "runner", tab: "Layout" },
-  // Browser: shows "needs OpenSTA" until engines/opensta.js exists (switch: OPENSTA_IN_BROWSER in app.js). Runner: real LibreLane/OpenSTA.
+  // Browser: OpenSTA (WASM) "pre-layout" run on the Yosys netlist here; the "post-route" run (with Magic's SPEF) happens inside the signoff stage. Runner: real LibreLane/OpenSTA.
   { id: "sta", label: "Timing (STA)", group: 4, where: "runner", tab: "Timing" },
   { id: "signoff", label: "Signoff (DRC/LVS)", group: 4, where: "runner" },
   { id: "reports", label: "Final Reports", group: 5, where: "browser", virtual: true, tab: "Reports" },

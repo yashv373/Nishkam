@@ -42,12 +42,12 @@ export function mount(el, ctx) {
   }
   async function refresh() {
     const list = await ctx.listFiles().catch(() => []);
-    const s = list.filter((p) => RPT.test(p)).join("|") + JSON.stringify(ctx.metrics && Object.keys(ctx.metrics).length);
+    const s = list.filter((p) => RPT.test(p)).join("|") + JSON.stringify(ctx.metrics && Object.keys(ctx.metrics).length) + JSON.stringify(ctx.staInfo || null);
     if (s === sig) return;
     if (sig) cache = new Map();
     sig = s;
     scan(list);
-    const corners = Object.keys(reports);
+    const corners = [...new Set([...Object.keys(reports), ...Object.keys(ctx.staInfo || {})])];
     cornerSel.innerHTML = corners.map((c) => `<option>${esc(c)}</option>`).join("");
     if (!corners.length) { $(".vw-tscroll").innerHTML = `<div class="vw-msg" style="display:block">No timing reports yet. Run the Timing (STA) stage.</div>`; chips.innerHTML = ""; return; }
     if (!$(".vw-hist")) $(".vw-tscroll").innerHTML = `<div class="vw-hist"></div><div class="vw-ptable"></div><div class="vw-detail"></div>`;
@@ -63,7 +63,17 @@ export function mount(el, ctx) {
     await show();
   }
 
+  // Browser OpenSTA runs (ctx.staInfo): what was run, the exact SDC, OpenSTA's own error if it failed.
+  function info() {
+    const i = ctx.staInfo?.[corner]; if (!i) return "";
+    return `<div class="vw-h">${esc(i.label)}</div>` + (i.error ? `<pre class="vw-err" style="white-space:pre-wrap;color:var(--err,#ff5c6c)">OpenSTA error:
+${esc(i.error)}</pre>` : "") +
+      `<details open><summary>SDC used (from Properties)</summary><pre style="white-space:pre-wrap">${esc(i.sdc)}</pre></details>`;
+  }
   async function show() {
+    if (ctx.staInfo?.[corner]?.error) { $(".vw-tscroll").innerHTML = `<div class="vw-info">${info()}</div>`; note.textContent = ""; return; }
+    if (!$(".vw-hist")) $(".vw-tscroll").innerHTML = `<div class="vw-hist"></div><div class="vw-ptable"></div><div class="vw-detail"></div>`;
+    $(".vw-info")?.remove();
     const p = reports[corner]?.[kind];
     if (!p) { note.textContent = "report missing"; return; }
     note.textContent = "loading...";
@@ -78,6 +88,7 @@ export function mount(el, ctx) {
     $(".vw-ptable").innerHTML = `<table><thead><tr><th>#</th><th>Endpoint</th><th>Startpoint</th><th>Clock</th><th class="r">Slack</th><th class="r">Required</th><th class="r">Arrival</th></tr></thead><tbody>` +
       cur.slice(0, 300).map((x, i) => `<tr data-i="${i}" class="${x.slack < 0 ? "neg" : ""}"><td>${i + 1}</td><td>${esc(x.end)}</td><td>${esc(x.start)}</td><td>${esc(x.clock)}</td><td class="r">${f3(x.slack)}</td><td class="r">${f3(x.required)}</td><td class="r">${f3(x.arrival)}</td></tr>`).join("") + `</tbody></table>`;
     detail();
+    $(".vw-hist").insertAdjacentHTML("beforebegin", `<div class="vw-info">${info()}</div>`);
   }
   function detail() {
     const x = cur?.[pathSel];

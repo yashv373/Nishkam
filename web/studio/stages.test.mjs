@@ -41,5 +41,9 @@ console.log("stages2 ok");
   t.deps.localStage = async (id) => (id === "sta" ? { ok: true, state: "unavailable", info: "needs OpenSTA" } : { ok: true, files: {} });
   await runStages(["route", "sta", "signoff"], t.deps);
   assert.deepEqual([t.st.route, t.st.sta, t.st.signoff], ["passed", "unavailable", "passed"]); }
+{ const t = mk(false); t.deps.local = () => true; // sta in browser runs OpenSTA: passed, and a failed run stops the later stages
+  t.deps.localStage = async (id) => ({ ok: id !== "sta", files: {}, staRuns: [{ key: "pre-layout" }] });
+  await runStages(["route", "sta", "signoff"], t.deps);
+  assert.deepEqual([t.st.route, t.st.sta, t.st.signoff], ["passed", "failed", "idle"]); }
 assert.ok(!plan("all").includes("presta"));
 console.log("stages local ok");
