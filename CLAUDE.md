@@ -57,7 +57,7 @@ you need to continue without asking the owner to explain again.
 ## Owner's machine
 
 - Windows 11. The iic-osic-tools container is named `gf180` (image `hpretl/iic-osic-tools:chipathon26`), with
-  `C:\Users\Asus\eda\designs` mounted at `/foss/designs`. It has 4 CPUs and ~3.9 GB RAM, so run one LibreLane job
+  `C:\Users\Asus\eda\designs` mounted at `/foss/designs`. Docker (WSL2) gets 16 threads and 12 GB RAM + 8 GB swap (`~/.wslconfig`, raised 2026-10-14; the laptop has 15 GB), but still run one LibreLane job
   at a time. A tiny8 run takes about 2.5 minutes.
 - In Git Bash, set `MSYS_NO_PATHCONV=1` before any `docker exec ... /foss/...` command, or the paths get mangled.
 - Related research project: OmniLane (MTJ non-volatile flip-flops in LibreLane) at
