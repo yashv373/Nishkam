@@ -84,6 +84,7 @@ ${g2.log}`);
   assert.ok(bad.cex && bad.cex.first >= 0, `${p.id}: no counterexample\n${bad.log}`);
   const starter = await grade(runYosys, Exit, p, p.starter);
   assert.ok(!starter.passed, `${p.id}: empty starter passed`);
+  assert.match(starter.error || "", /no logic yet/, `${p.id}: starter gives a raw Yosys message: ${starter.error}`);
   console.log(`ok ${p.id}  (cells=${good.stat.cells}, bug caught at cycle ${bad.cex.first})`);
 }
 const broken = await grade(runYosys, Exit, PROBLEMS[0], "module counter(input clk; endmodule");

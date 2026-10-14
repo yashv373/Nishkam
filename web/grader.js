@@ -98,6 +98,9 @@ export async function grade(runYosys, Exit, problem, userCode, log = () => {}) {
   const res = { passed, log: logText };
   if (!passed) {
     if (fsOut && fsOut["cex.vcd"]) res.cex = counterexample(fsOut["cex.vcd"]);
+    else if (/Can't find gate module/.test(logText))
+      // Yosys skips a module with no logic at all (the untouched starter), so the miter finds nothing to compare.
+      res.error = `Your module "${problem.top}" has no logic yet. Drive every output (assign or always block), keep the module name and the port names from the starter, then submit again.`;
     else res.error = (logText.match(/ERROR:.*$/m) || ["Yosys failed: check your code compiles"])[0];
   }
   if (passed) {

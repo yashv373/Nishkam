@@ -137,7 +137,7 @@ async function submitRtl() {
         <small>Your outputs differ from the reference at cycle ${res.cex.first}. Inputs that lead there:</small></div>
       ${cexTable(res.cex)}`;
   } else {
-    $("result").innerHTML = `<div class="banner bad">Didn't compile</div><pre class="log">${esc(res.error || res.log)}</pre>`;
+    $("result").innerHTML = `<div class="banner bad">Couldn't grade this</div><pre class="log">${esc(res.error || res.log)}</pre>`;
   }
 }
 
