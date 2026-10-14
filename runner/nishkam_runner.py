@@ -472,9 +472,10 @@ def main():
                     help="job folder on this machine, must be mounted in the container")
     ap.add_argument("--container-dir", default="/foss/designs/nishkam_jobs", help="same folder inside the container")
     ap.add_argument("--origin", action="append",
-                    default=["https://yashv373.github.io", "http://localhost:8000", "http://127.0.0.1:8000"],
+                    default=["https://nishkam.world", "https://www.nishkam.world", "https://yashv373.github.io",
+                             "http://localhost:8000", "http://127.0.0.1:8000"],
                     help="web page origin allowed to use this runner (repeatable)")
-    ap.add_argument("--site", default="https://yashv373.github.io/Nishkam",
+    ap.add_argument("--site", default="https://nishkam.world",
                     help="where the Nishkam page is served (http://localhost:8000 for local development)")
     ap.add_argument("--allow-shell", action="store_true",
                     help="let the page run shell commands in the container (off by default)")

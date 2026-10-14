@@ -1,4 +1,4 @@
-# Publishes the web/ folder to https://yashv373.github.io/Nishkam/ on every push to main.
+# Publishes the web/ folder to https://nishkam.world (also https://yashv373.github.io/Nishkam/, which redirects there) on every push to main.
 name: Deploy to GitHub Pages
 on:
   push:

@@ -12,7 +12,7 @@ Practice digital chip design in the browser, from RTL to layout.
 - Any RTL problem you solve can be sent through the full flow to see it as a chip.
 - **Nishkam Studio** (`studio.html`) is a browser IDE for the whole flow, from RTL to GDS, on gf180mcuD. It lints, simulates, synthesizes, times, places, routes, draws the layout, checks it (DRC) and compares it with the netlist (LVS). It runs in your browser with no install. With the local helper connected, the physical stages can run the real LibreLane flow instead.
 
-Live at **https://yashv373.github.io/Nishkam/**
+Live at **https://nishkam.world** (the old https://yashv373.github.io/Nishkam/ address redirects there)
 
 ## Run it locally
 

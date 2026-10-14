@@ -1,7 +1,7 @@
 # Notes for Claude: read this first
 
 This is **Nishkam** (निष्काम): free digital IC design practice in the browser, from RTL to layout.
-Live: https://yashv373.github.io/Nishkam/ · Repo: https://github.com/yashv373/Nishkam
+Live: https://nishkam.world (custom domain bought 2026-10-14 at GoDaddy; old https://yashv373.github.io/Nishkam/ redirects) · Repo: https://github.com/yashv373/Nishkam
 README.md covers what it does, how to run it, tests and adding problems. This file covers everything else
 you need to continue without asking the owner to explain again.
 
