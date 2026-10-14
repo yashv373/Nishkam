@@ -155,10 +155,11 @@ function buildTabs() {
   $("tabs").replaceChildren(...TABS.map((t) => { const b = document.createElement("button"); b.textContent = t; b.setAttribute("role", "tab");
     b.onclick = () => showTab(t); b.dataset.t = t; return b; }));
 }
-function emptyCard(el, title, text, demo) {
+function emptyCard(el, title, text, demo, act) {
   el.replaceChildren(); const c = document.createElement("div"); c.className = "empty";
   c.innerHTML = "<h3></h3><p></p>"; c.firstChild.textContent = title; c.children[1].textContent = text;
   if (demo) { const b = document.createElement("button"); b.textContent = "Load demo run"; b.onclick = loadDemo; c.append(b); }
+  if (act) { const b = document.createElement("button"); b.className = "primary"; b.textContent = act[0]; b.onclick = act[1]; c.append(b); }
   el.append(c);
 }
 async function showTab(t) {
@@ -167,7 +168,7 @@ async function showTab(t) {
   document.querySelectorAll(".view").forEach((v) => v.hidden = v.dataset.v !== t);
   const el = document.querySelector(`.view[data-v="${t}"]`);
   if (t === "Reports") repWrap(el), repCard();
-  if (t === "Timing" && !ctx.source) { emptyCard(el, "No timing yet", NO_STA + ".", false); return; }
+  if (t === "Timing" && !ctx.source) { emptyCard(el, "No timing yet", NO_STA, false, ["Run Timing (STA)", () => start(plan("to", "sta"))]); return; }
   if (["Layout", "GDS", "Timing", "Reports"].includes(t)) {
     if (viewers[t]) return viewers[t].inst.update?.(ctx);
     const host = t === "Reports" ? $("repHost") : el;
@@ -200,7 +201,7 @@ const view = (n) => document.querySelector(`.view[data-v="${n}"]`);
 const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const sum = { phys: {}, sta: {} };   // browser results for the Reports card: synth / timing / power
 // Timing needs a real STA tool. Nothing in the browser computes timing today (no home-made estimator).
-const NO_STA = "Run Synthesis and then Timing (STA): OpenSTA runs in your browser. With a local runner connected, LibreLane's numbers are shown instead";
+const NO_STA = "Run the Timing (STA) stage. OpenSTA runs here in your browser.";
 const STA_LABEL = { "pre-layout": "pre-layout (ideal clock, no wires)", "post-route": "post-route (wires from Magic extraction; no clock tree)" };
 let wave = null;
 
@@ -234,9 +235,9 @@ function repCard() {
   const sy = sum.synth;
   c.replaceChildren(
     card("Synthesis report", sy && [["Cells", sy.cells ?? "n/a"], ["Area", f(sy.area, " µm²")], ...(sy.kinds || []).slice(0, 12).map(([k, n]) => [k, n])], "Run Synthesis to see cell count, area and cell kinds."),
-    card(M ? "Timing (OpenSTA via LibreLane)" : "Timing (OpenSTA in browser)", runnerTiming() || staRows((x) => [["setup worst slack", f(x.setup_ws_ns, " ns", 3)], ["setup TNS", f(x.setup_tns_ns, " ns", 3)], ["hold worst slack", f(x.hold_ws_ns, " ns", 3)], ["hold TNS", f(x.hold_tns_ns, " ns", 3)]]), NO_STA + "."),
+    card(M ? "Timing (OpenSTA via LibreLane)" : "Timing (OpenSTA in browser)", runnerTiming() || staRows((x) => [["setup worst slack", f(x.setup_ws_ns, " ns", 3)], ["setup TNS", f(x.setup_tns_ns, " ns", 3)], ["hold worst slack", f(x.hold_ws_ns, " ns", 3)], ["hold TNS", f(x.hold_tns_ns, " ns", 3)]]), NO_STA),
     card("Physical (in browser, experimental). " + NOT_LL, physRows(), "Run Placement, Routing and Signoff with no runner connected (or pick Physical engine: In browser)."),
-    card(M ? "Power (via LibreLane)" : "Power (OpenSTA, default switching activity)", runnerPower() || staRows((x) => [["total", f(x.total_uW, " µW", 4)], ["internal", f(x.internal_uW, " µW", 4)], ["switching", f(x.switching_uW, " µW", 4)], ["leakage", f(x.leakage_uW, " µW", 4)]]), NO_STA + "."));
+    card(M ? "Power (via LibreLane)" : "Power (OpenSTA, default switching activity)", runnerPower() || staRows((x) => [["total", f(x.total_uW, " µW", 4)], ["internal", f(x.internal_uW, " µW", 4)], ["switching", f(x.switching_uW, " µW", 4)], ["leakage", f(x.leakage_uW, " µW", 4)]]), NO_STA));
 }
 
 // Schematic: SVG in an <img>, wheel zoom + drag pan by CSS transform.

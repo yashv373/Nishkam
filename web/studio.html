@@ -9,6 +9,15 @@
 <link rel="stylesheet" href="studio/viewers/viewers.css">
 </head>
 <body>
+<div id="phone">
+  <span class="pmark" role="img" aria-label="Nishkam"></span>
+  <h1>Studio needs a bigger screen</h1>
+  <p>Studio is a full chip-design editor. Open it on a computer or a tablet.</p>
+  <a class="pbtn pri" href="app.html">Practice problems</a>
+  <a class="pbtn" href="index.html">Back to home</a>
+  <button class="pbtn" id="pcopy" type="button">Copy link</button>
+</div>
+<script>document.getElementById('pcopy').onclick=function(){var b=this;(navigator.clipboard?navigator.clipboard.writeText(location.href.split('#')[0]):Promise.reject()).then(function(){b.textContent='Copied'},function(){b.textContent='Copy failed'})}</script>
 <header id="top" class="glass">
   <a href="./" aria-label="Nishkam home" style="display:contents"><span class="logotype" role="img" aria-label="Nishkam"></span></a>
   <span class="sep"></span>

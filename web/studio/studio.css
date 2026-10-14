@@ -186,3 +186,22 @@ dialog h3{margin:0 0 8px}
 #rawlog{flex:1;min-height:0;overflow:auto;margin:0;padding:6px 10px;font:12px/1.5 var(--mono);white-space:pre-wrap;word-break:break-all;user-select:text}
 .rawhdr{user-select:none;color:var(--text-2);margin-top:4px}
 .rawhdr::before{content:attr(data-t)}
+
+#phone{display:none}
+@media (max-width:699px){
+body>:not(#phone):not(script){display:none!important}
+#phone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:100vh;min-height:100dvh;padding:24px 16px;text-align:center;background:#000;color:#fff;box-sizing:border-box;width:100%}
+body{overflow:auto;background:#000}
+.pmark{width:84px;height:63px;background:#1430ff;filter:drop-shadow(0 0 18px #4a63ff);-webkit-mask:url(../brand/mark.svg) center/contain no-repeat;mask:url(../brand/mark.svg) center/contain no-repeat;margin-bottom:12px}
+#phone h1{font:600 28px/1.15 "Helvetica Neue",Inter,Arial,sans-serif;margin:0}
+#phone p{margin:0 0 12px;max-width:320px;color:#aab;font:16px/1.4 "Helvetica Neue",Inter,Arial,sans-serif}
+.pbtn{display:block;height:auto;flex:none;line-height:1.2;width:100%;max-width:300px;box-sizing:border-box;padding:13px 16px;border:1px solid #333;border-radius:12px;background:transparent;color:#fff;font:500 16px "Helvetica Neue",Inter,Arial,sans-serif;text-decoration:none;cursor:pointer}
+.pbtn.pri{background:#1430ff;border-color:#4a63ff;box-shadow:0 0 24px rgba(74,99,255,.5)}
+}
+#top{height:60px}
+#top button,#top select{height:35px}
+#top button.chip{height:30px}
+#top .logotype{height:37px}
+
+:root[data-theme=dark] .sin img{filter:invert(1) hue-rotate(180deg)}
+:root[data-theme=dark] .svp{background:#0b0d14}

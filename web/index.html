@@ -60,7 +60,7 @@ nav.top, .window, .devframe, .hero .ctas .btn.glass { -webkit-backdrop-filter: b
 
 /* nav */
 nav.top { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 50; width: min(1280px, calc(100% - 28px));
-  display: flex; align-items: center; gap: 26px; padding: 8px 10px 8px 26px; border-radius: 999px; }
+  display: flex; align-items: center; gap: 26px; padding: 14.5px 12px 14.5px 28px; border-radius: 999px; }
 nav.top .logo { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; }
 nav.top .logo .logotype { height: 34px; }
 nav.top .links { display: flex; gap: 24px; font-size: 14px; color: #d1d1d6; }
@@ -87,6 +87,7 @@ nav.top .sp { flex: 1; }
   background: #000 url(brand/media/hero-poster.jpg) center / cover no-repeat; isolation: isolate; }
 .hero video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; opacity: 0; transition: opacity 1.6s ease; }
 .hero video.on { opacity: .6; }
+.hero:has(video.on) { background-image: none; }
 .hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
   radial-gradient(70% 55% at 50% 45%, rgba(0,0,0,.05), rgba(0,0,0,.55) 100%), linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 62%, #000 100%); }
 .hero .label { color: #c7d0ff; }
@@ -287,6 +288,7 @@ footer a:hover { color: var(--ink); }
 
 @media (max-width: 900px) {
   nav.top .links { display: none; }
+  nav.top { gap: 12px; padding-left: 20px; }
   .window .body, .split, .steps, .grid, .flow { grid-template-columns: 1fr; }
   .window .stmt { border-right: 0; border-bottom: 1px solid var(--line); }
   .step + .step { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
@@ -303,6 +305,7 @@ footer a:hover { color: var(--ink); }
   .reveal { opacity: 1; transform: none; }
   .reveal .draw path, .reveal .draw polyline { stroke-dashoffset: 0; }
 }
+@media (max-width: 440px) { nav.top .btn.glass { display: none; } }
 </style>
 </head>
 <body>
@@ -386,10 +389,10 @@ footer a:hover { color: var(--ink); }
             <div class="devframe glass" id="devframe">
               <div class="chrome"><i></i><i></i><i></i><span class="t" id="devtitle">Studio · Editor</span></div>
               <div class="screens" id="screens">
-                <img class="on" src="brand/shots/studio-editor.jpg" width="1499" height="812" loading="lazy" alt="Nishkam Studio editor with a small Verilog shift register">
-                <img src="brand/shots/studio-schematic.jpg" width="970" height="525" loading="lazy" alt="Schematic of the shift register drawn by Studio">
-                <img src="brand/shots/studio-gds.jpg" width="970" height="525" loading="lazy" alt="GDS layout of tiny8 on gf180mcuD">
-                <img src="brand/shots/studio-timing.jpg" width="970" height="525" loading="lazy" alt="Timing report with slack distribution">
+                <img class="on" src="brand/shots/studio-editor.webp" width="2400" height="1350" loading="lazy" alt="Nishkam Studio editor showing the tiny8 Verilog source">
+                <img src="brand/shots/studio-schematic.webp" width="2400" height="1350" loading="lazy" alt="Schematic of the shift register drawn by Studio">
+                <img src="brand/shots/studio-gds.webp" width="2400" height="1350" loading="lazy" alt="GDS layout of tiny8 on gf180mcuD">
+                <img src="brand/shots/studio-timing.webp" width="2400" height="1350" loading="lazy" alt="Timing report with slack distribution">
               </div>
               <div class="bar"><i id="showBar"></i></div>
             </div>
@@ -625,7 +628,7 @@ if (!still && matchMedia("(hover: hover)").matches)
 
 // parallax: video drifts slower than the page (transform only)
 if (!still) { let tick = false;
-  addEventListener("scroll", () => { if (tick || !heroVis) return; tick = true; requestAnimationFrame(() => { tick = false; const v = hero.querySelector("video"); if (v) v.style.transform = `scale(1.5) translateY(${scrollY * 0.12}px)`; }); }, { passive: true }); }
+  addEventListener("scroll", () => { if (tick || !heroVis) return; tick = true; requestAnimationFrame(() => { tick = false; const v = hero.querySelector("video"); if (v) v.style.transform = `translateY(${scrollY * 0.12}px)`; }); }, { passive: true }); }
 </script>
 </body>
 </html>

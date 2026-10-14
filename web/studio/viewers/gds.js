@@ -35,7 +35,7 @@ export function mount(el, ctx) {
     <span class="vw-note vw-t"></span>
     <button class="vw-btn vw-fit">Fit</button>
     <button class="vw-btn vw-3d" title="KLayout viewer (2D/3D) in a frame">KLayout / 3D</button>
-    <button class="vw-btn vw-tt" title="Tiny Tapeout Explorer by A. Mordvintsev (3D, wire highlights). Runs locally, nothing uploaded">Tiny Tapeout Explorer (3D)</button>
+    <button class="vw-btn vw-tt" title="Tiny Tapeout Explorer by A. Mordvintsev (3D, wire highlights). Runs locally, nothing uploaded">3D (Tiny Tapeout)</button>
   </div>
   <div class="vw-body">
     <div class="vw-side" style="width:190px"></div>
@@ -47,7 +47,7 @@ export function mount(el, ctx) {
   let curSrc = null, k3 = null; // curSrc: async () => ArrayBuffer of the shown GDS
   $(".vw-3d").onclick = async () => {
     const b = $(".vw-3d");
-    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; $(".vw-3d").textContent = "KLayout / 3D"; $(".vw-tt").textContent = "Tiny Tapeout Explorer (3D)"; return; }
+    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; $(".vw-3d").textContent = "KLayout / 3D"; $(".vw-tt").textContent = "3D (Tiny Tapeout)"; return; }
     if (!curSrc) return;
     const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0;z-index:5;background:#07080c";
     $(".vw-body").style.position = "relative"; $(".vw-body").appendChild(box);
@@ -55,7 +55,7 @@ export function mount(el, ctx) {
   };
   $(".vw-tt").onclick = async () => {
     const b = $(".vw-tt");
-    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; $(".vw-3d").textContent = "KLayout / 3D"; b.textContent = "Tiny Tapeout Explorer (3D)"; return; }
+    if (k3) { k3.destroy(); k3.box.remove(); k3 = null; $(".vw-3d").textContent = "KLayout / 3D"; b.textContent = "3D (Tiny Tapeout)"; return; }
     if (!curSrc) return;
     const box = document.createElement("div"); box.style.cssText = "position:absolute;inset:0;z-index:5;background:#07080c";
     $(".vw-body").style.position = "relative"; $(".vw-body").appendChild(box);
@@ -104,7 +104,8 @@ export function mount(el, ctx) {
       const L = flat.layers.get(k); if (!L || !vis[k]) continue;
       const { off, xy: P, bb } = L; let cnt = 0;
       g.fillStyle = g.strokeStyle = color[k];
-      const flush = () => { g.globalAlpha = 0.5; g.fill(); if (s > 2 && L.n < 3000) { g.globalAlpha = 0.9; g.stroke(); } g.beginPath(); };
+      const outline = /bndry|boundary/i.test(names.get(k)?.name || ""); // boundary layers: outline only, a fill hides the chip
+      const flush = () => { if (outline) { g.globalAlpha = 0.9; g.stroke(); g.beginPath(); return; } g.globalAlpha = 0.5; g.fill(); if (s > 2 && L.n < 3000) { g.globalAlpha = 0.9; g.stroke(); } g.beginPath(); };
       g.beginPath();
       for (let i = 0; i < L.n; i++) {
         const a = bb[4 * i], b = bb[4 * i + 1], c = bb[4 * i + 2], d = bb[4 * i + 3];
