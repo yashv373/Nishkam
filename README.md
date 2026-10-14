@@ -79,6 +79,7 @@ node web/studio/engines/lvs.selftest.mjs
 node web/studio/viewers/parse.test.mjs
 node web/studio/viewers/gds.test.mjs
 node web/landing.check.mjs
+node web/brand/make-hero-routes.mjs   # not a test: rebuilds the landing hero's chip data (brand/media/tiny8-routes.*)
 ```
 
 Browser self-tests, open in a browser served from `web/`:

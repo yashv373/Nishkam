@@ -84,12 +84,14 @@ nav.top .sp { flex: 1; }
 
 /* hero: blueprint sketch of the chip flow (spec to wafer) behind translucent glass type */
 .hero { position: relative; min-height: 100vh; min-height: 100svh; display: flex; align-items: center; justify-content: center; padding: 140px 0 90px; text-align: center; overflow: hidden;
-  background: #000 url(brand/media/hero-poster.jpg) center / cover no-repeat; isolation: isolate; }
-.hero video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; opacity: 0; transition: opacity 1.6s ease; }
-.hero video.on { opacity: .6; }
-.hero:has(video.on) { background-image: none; }
-.hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
-  radial-gradient(70% 55% at 50% 45%, rgba(0,0,0,.05), rgba(0,0,0,.55) 100%), linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 62%, #000 100%); }
+  background: #000; isolation: isolate; }
+.hero canvas { position: absolute; inset: 0; z-index: -2; opacity: 0; transition: opacity 1.2s ease; }
+.hero canvas.on { opacity: 1; }
+.hero::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background:
+  radial-gradient(52% 46% at 50% 47%, rgba(0,0,0,.82), rgba(0,0,0,.5) 55%, rgba(0,0,0,0) 100%),
+  radial-gradient(120% 90% at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.7) 100%),
+  linear-gradient(180deg, rgba(0,0,0,.6) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0) 70%, #000 100%); }
+@media (max-width: 700px) { .hero::before { background: radial-gradient(90% 50% at 50% 47%, rgba(0,0,0,.85), rgba(0,0,0,.45) 70%, rgba(0,0,0,.15) 100%), linear-gradient(180deg, rgba(0,0,0,.6) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 72%, #000 100%); } }
 .hero .label { color: #c7d0ff; }
 .hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(56px, 11vw, 168px); line-height: .9; letter-spacing: -.035em; margin: 22px 0 28px; }
 .hero h1 .ln { display: block; }
@@ -325,6 +327,7 @@ footer a:hover { color: var(--ink); }
 </nav>
 
 <header class="hero" id="top">
+  <canvas id="route" aria-hidden="true"></canvas>
   <div class="wrap" style="position:relative">
     <div class="label rv">Digital IC design practice</div>
     <h1 aria-label="Learn chip design by doing it."><span class="ln"><span class="w" style="--i:0">Learn</span> <span class="w" style="--i:1">chip</span> <span class="w" style="--i:2">design</span></span><span class="ln"><em><span class="w" style="--i:3">by</span> <span class="w" style="--i:4">doing</span> <span class="w" style="--i:5">it.</span></em></span></h1>
@@ -533,7 +536,7 @@ const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting &
   { threshold: 0.15 });
 document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
 
-let flowVis = false, heroVis = true;
+let flowVis = false;
 const watch = (el, f) => new IntersectionObserver((es) => f(es[0].isIntersecting)).observe(el);
 watch(document.querySelector(".flow"), (v) => (flowVis = v));
 let winVis = false; watch(document.querySelector(".window"), (v) => (winVis = v));
@@ -584,19 +587,10 @@ loop();
 // glass: light follows the pointer
 document.addEventListener("pointermove", (e) => { const g = e.target.closest && e.target.closest(".glass"); if (!g) return; const r = g.getBoundingClientRect(); g.style.setProperty("--mx", e.clientX - r.left + "px"); g.style.setProperty("--my", e.clientY - r.top + "px"); });
 
-// hero video: blueprint sketch of the flow, loaded after first paint, paused off-screen, skipped for reduced motion
+// hero: live draw-in of our routed tiny8 chip (data built by brand/make-hero-routes.mjs); pauses off-screen itself
 const hero = document.getElementById("top");
-function startVideo() {
-  if (still || saveData()) return;
-  const v = document.createElement("video");
-  v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute("aria-hidden", "true"); v.preload = "auto";
-  v.innerHTML = '<source src="brand/media/hero.mp4" type="video/mp4"><source src="brand/media/hero.webm" type="video/webm">';
-  hero.prepend(v);
-  v.addEventListener("canplay", () => { v.classList.add("on"); if (heroVis) v.play().catch(() => {}); }, { once: true });
-  watch(hero, (vis) => { heroVis = vis; vis ? v.play().catch(() => {}) : v.pause(); });
-}
 function saveData() { return navigator.connection && navigator.connection.saveData; }
-addEventListener("load", () => setTimeout(startVideo, 300));
+import("./brand/hero-route.js").then((m) => { const c = document.getElementById("route"); return m.startHeroRoutes(c, { host: hero, still: saveData() }).then(() => c.classList.add("on")); }).catch(() => {});
 
 // showcase: scroll position picks the screen (only while on screen)
 const track = document.getElementById("showTrack"), showEl = document.getElementById("see"),
@@ -627,9 +621,6 @@ if (!still && matchMedia("(hover: hover)").matches)
     b.addEventListener("pointerleave", () => (b.style.transform = ""));
   });
 
-// parallax: video drifts slower than the page (transform only)
-if (!still) { let tick = false;
-  addEventListener("scroll", () => { if (tick || !heroVis) return; tick = true; requestAnimationFrame(() => { tick = false; const v = hero.querySelector("video"); if (v) v.style.transform = `translateY(${scrollY * 0.12}px)`; }); }, { passive: true }); }
 </script>
 </body>
 </html>
