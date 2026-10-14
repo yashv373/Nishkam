@@ -11,7 +11,7 @@ const Y = await import("./studio/engines/yosys.worker.js"), S = await import("./
 const cb = { log() {}, progress() {} };
 const deps = { synth: (r) => Y.handle(r, cb), sta: (r) => S.handle(r, cb) };
 
-for (const p of PROBLEMS.filter((p) => p.kind === "rtl")) {
+for (const p of PROBLEMS.filter((p) => p.kind === "rtl" && !p.cdc)) {
   const r = await scoreDesign(p.top, p.reference, deps);
   assert.ok(!r.error, `${p.id}: ${r.error}`);
   assert.ok(r.areaUm2 > 0 && r.fmaxMhz > 0, p.id);

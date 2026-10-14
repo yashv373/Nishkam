@@ -82,7 +82,9 @@ function renderList() {
 function openProblem(p) {
   current = p;
   history.replaceState(null, "", "?" + p.id);
-  const how = p.kind === "rtl"
+  const how = p.cdc
+    ? `Graded by rules, not by matching a reference. Yosys reads your netlist and checks that every crossing goes through at least two flops of the other clock, then runs your design with two independent clocks where the first flop of each crossing bit may catch the old or the new value, and checks the result. Ctrl+Enter submits.`
+    : p.kind === "rtl"
     ? `Graded by formal equivalence: Yosys' SAT solver compares your design with a reference for <b>every</b> input sequence: it tries to prove they match for all cycles, and otherwise checks the first ${DEPTH} cycles after reset. If they ever differ, you get the exact cycle where they differ. Ctrl+Enter submits.`
     : `You edit the knobs (JSON). The RTL is fixed. Allowed: <code>DIE_AREA</code> [x0, y0, x1, y1] in µm, <code>PL_TARGET_DENSITY_PCT</code>, <code>SYNTH_STRATEGY</code> (e.g. "AREA 0"), <code>GRT_ALLOW_CONGESTION</code>.`;
   $("statement").innerHTML = `<h1>${esc(p.title)}</h1>
@@ -162,7 +164,16 @@ async function submitRtl() {
   });
   busy = false; renderButtons();
   if (p !== current) return;
-  if (res.passed) {
+  if (res.passed && res.cdc) {
+    solved.add(p.id); store.set("solved", [...solved]); renderList(); renderAid();
+    $("result").innerHTML = `<div class="banner ok big">✓ Accepted
+        <small>The crossing is built correctly, and no check failed in the first ${res.steps} clock events. This is a bounded check, not a proof. ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
+      <p class="actions">${nextStep()}</p>`;
+    wireNext();
+  } else if (res.structural) {
+    $("result").innerHTML = `<div class="banner bad">Not a safe crossing<small>${res.structural.map(esc).join("<br>")}</small></div>
+      <p class="muted">This is a structure rule, so there is no step table. Fix the net named above and submit again.</p>`;
+  } else if (res.passed) {
     solved.add(p.id); store.set("solved", [...solved]); renderList(); renderAid();
     const kinds = res.stat?.kinds?.map(([k, n]) => `${n}× ${k}`).join(", ") || "";
     $("result").innerHTML = `<div class="banner ok big">✓ Accepted
@@ -177,6 +188,12 @@ async function submitRtl() {
     wireNext();
     $("score").onclick = () => runScore(p, code);
     $("harden").onclick = () => runFlow({ ...p, checks: null }, { [`${p.top}.v`]: code }, HARDEN_KNOBS, $("flow"));
+  } else if (res.cex && res.cex.kind === "cdc") {
+    const c = res.cex;
+    $("result").innerHTML = `<div class="banner bad">Failed the clock-crossing check<small>At step ${c.first}: ${c.reasons.length ? esc(c.reasons.join("; ")) : "a check failed"}. Each step is one clock event: <code>ena</code> or <code>enb</code> = 1 means that clock ticked.</small></div>
+      ${cexTable(c)}
+      <p class="actions"><button class="primary" id="again">Fix it and submit again</button></p>`;
+    $("again").onclick = () => editor.focus();
   } else if (res.cex) {
     const c = res.cex, o = c.outputs.find((o) => o.expected[c.first] !== "x" && o.expected[c.first] !== o.got[c.first]);
     const what = o ? `Your design differs from the reference at cycle ${c.first} on output <code>${esc(o.name)}</code>: expected ${esc(o.expected[c.first])}, yours gave ${esc(o.got[c.first] || "nothing")}.`

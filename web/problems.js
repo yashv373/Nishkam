@@ -1,3 +1,5 @@
+import { CDC_PROBLEMS } from "./cdc-problems.js";
+
 // Nishkam problem bank.
 // ponytail: references ship to the browser, so anyone can read them in devtools.
 // Fine for an MVP; move grading server-side before using this for hiring or paid data.
@@ -257,6 +259,7 @@ endmodule
 endmodule
 `,
   },
+  ...CDC_PROBLEMS,
   {
     id: "squeeze-tiny8",
     title: "Squeeze tiny8 onto a smaller die",

@@ -66,7 +66,7 @@ const ALT = {
   },
 };
 
-for (const p of PROBLEMS.filter((p) => p.kind === "rtl")) {
+for (const p of PROBLEMS.filter((p) => p.kind === "rtl" && !p.cdc)) {
   const a = ALT[p.id];
   assert.ok(a, `no test answers for ${p.id}`);
   const t0 = Date.now();
@@ -101,3 +101,4 @@ const broken = await grade(runYosys, Exit, PROBLEMS[0], "module counter(input cl
 assert.ok(!broken.passed && broken.error, "syntax error must be reported");
 console.log("ok syntax error ->", broken.error);
 console.log("all grader tests passed");
+await import("./cdc.test.mjs");
