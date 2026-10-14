@@ -165,7 +165,15 @@ function emptyCard(el, title, text, demo, act) {
   if (act) { const b = document.createElement("button"); b.className = "primary"; b.textContent = act[0]; b.onclick = act[1]; c.append(b); }
   el.append(c);
 }
-async function showTab(t) {
+const BNOTE = { Timing: "Browser timing: one corner (typical, 25 °C, 5 V) and an ideal clock (no clock tree), so hold and skew are approximate.",
+  Layout: "Browser place and route (graywolf, qrouter) does not optimise for timing; results will differ from an OpenROAD run." };
+BNOTE.GDS = BNOTE.Layout;
+function bnote(t) {   // short grey note on browser-made results; runner / demo results stay unlabelled
+  const el = view(t), old = el?.querySelector(":scope > .bnote"); old?.remove();
+  if (el && BNOTE[t] && ctx.source === "browser") el.prepend(h("div", "bnote", BNOTE[t]));
+}
+async function showTab(t) { await showTab0(t); bnote(t); }
+async function showTab0(t) {
   curTab = t;
   document.querySelectorAll("#tabs button").forEach((b) => { b.classList.toggle("on", b.dataset.t === t); b.setAttribute("aria-selected", b.dataset.t === t); });
   document.querySelectorAll(".view").forEach((v) => v.hidden = v.dataset.v !== t);
@@ -241,6 +249,7 @@ function repCard() {
     card(M ? "Timing (OpenSTA via LibreLane)" : "Timing (OpenSTA in browser)", runnerTiming() || staRows((x) => [["setup worst slack", f(x.setup_ws_ns, " ns", 3)], ["setup TNS", f(x.setup_tns_ns, " ns", 3)], ["hold worst slack", f(x.hold_ws_ns, " ns", 3)], ["hold TNS", f(x.hold_tns_ns, " ns", 3)]]), NO_STA),
     card("Physical (in browser, experimental). " + NOT_LL, physRows(), "Run Placement, Routing and Signoff with no runner connected (or pick Physical engine: In browser)."),
     card(M ? "Power (via LibreLane)" : "Power (OpenSTA, default switching activity)", runnerPower() || staRows((x) => [["total", f(x.total_uW, " µW", 4)], ["internal", f(x.internal_uW, " µW", 4)], ["switching", f(x.switching_uW, " µW", 4)], ["leakage", f(x.leakage_uW, " µW", 4)]]), NO_STA));
+  if (!M && Object.keys(sum.sta).length) c.children[1].append(h("p", "muted", BNOTE.Timing));
 }
 
 // Schematic: SVG in an <img>, wheel zoom + drag pan by CSS transform.
@@ -289,7 +298,7 @@ function staShow(r, id) {
   }
   const paths = Object.keys(r.files || {}).filter((p) => p.startsWith("browser/"));
   if (id === "sta") { regBrowser(paths); showTab("Timing"); }
-  else for (const v of Object.values(viewers)) v.inst.update?.(ctx);
+  else { for (const v of Object.values(viewers)) v.inst.update?.(ctx); bnote(curTab); }
 }
 async function onResult(id, r) {
   for (const [p, d] of Object.entries(r.files || {})) { outputs[p] = d; if (!artifacts.some((a) => a.name === p)) artifacts.push({ name: p, get: async () => outputs[p] }); }
@@ -352,7 +361,7 @@ async function staRun(key, files, io) {
 async function localStage(id, io) {
   const top = opts.top, need = (v, what) => { if (!v) throw new Error(`Run ${what} first.`); return v; };
   if (id === "floorplan") { io.onLog("Floorplan is part of Placement in the browser flow (the die is sized from the cells). " + NOT_LL); return { ok: true, info: "in placement" }; }
-  if (id === "cts") return { ok: true, state: "unavailable", info: "skipped (qflow has no clock tree; runner does real CTS)" };
+  if (id === "cts") return { ok: true, state: "unavailable", info: "Clock tree: needs the local runner (OpenROAD) for now. A browser version is in progress." };
   if (id === "sta") {
     sum.sta = {};
     const { x, files } = await staRun("pre-layout", { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, io);

@@ -219,3 +219,5 @@ body{overflow:auto;background:#000}
 #tourPop .tcount{font-size:var(--fs-xs);color:var(--text-3)}
 #tourPop .trow{display:flex;gap:8px;justify-content:flex-end}
 @media (prefers-reduced-motion:reduce){#tourHole{transition:none}}
+
+.bnote{flex:none;padding:4px 12px;border-bottom:1px solid var(--line);background:var(--bg-2);color:var(--text-3);font-size:var(--fs-sm)}
