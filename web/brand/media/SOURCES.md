@@ -1,5 +1,6 @@
 # Hero video source
 
-hero.mp4 / hero.webm / hero-poster.jpg are our own footage: a slow zoom over the real tiny8 layout
-(gf180mcuD, LibreLane demo run, `final/klayout_gds/tiny8.klayout.gds`), rendered with KLayout in the
-iic-osic-tools container, tinted blue and encoded with ffmpeg. No third-party footage.
+hero.mp4 / hero.webm / hero-poster.jpg: a 10 s pencil-sketch animation of the chip flow
+(spec, architecture, RTL, synthesis, PD, GDS, foundry, wafer, phone), generated with Google Gemini
+at the owner's request (2026-10-14). We inverted it to black, tinted the lines brand blue,
+dropped the audio and added a fade at the loop point with ffmpeg. The watermark disappears in the contrast curve.
