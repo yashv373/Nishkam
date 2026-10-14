@@ -2,10 +2,9 @@
 // ponytail: references ship to the browser, so anyone can read them in devtools.
 // Fine for an MVP; move grading server-side before using this for hiring or paid data.
 
-// from omnilane/designs/tiny8/tiny8.v
-const TINY8 = `// tiny8: minimal 8-bit CPU to prove the OmniLane flow.
+const TINY8 = `// tiny8: a minimal 8-bit CPU.
 // Program memory is outside (instr/pc ports) so synthesis can't fold the program away.
-// State = pc (8) + 4 regs (32) + out (8) = 48 flip-flops: these are what get swapped to NV-DFFs.
+// State = pc (8) + 4 regs (32) + out (8) = 48 flip-flops.
 //
 // instr[15:0] = op[15:12] rd[11:10] rs[9:8] imm[7:0]
 //   1 LDI rd = imm      2 ADD rd += rs     3 SUB rd -= rs
@@ -161,7 +160,7 @@ endmodule
     id: "gray-counter",
     title: "4-bit Gray-code counter",
     difficulty: "Medium",
-    tags: ["RTL", "CDC basics"],
+    tags: ["RTL", "counters", "encoding"],
     kind: "rtl",
     top: "gray_cnt",
     reset: { port: "rst", active: 1 },
@@ -234,7 +233,7 @@ endmodule
     kind: "flow",
     top: "tiny8",
     statement: `
-<p><code>tiny8</code> (an 8-bit CPU with 48 flip-flops) signs off cleanly on a 250 × 250 µm die in gf180mcuD. That die is mostly filler.</p>
+<p><code>tiny8</code> is a small 8-bit CPU with 48 flip-flops. It passes signoff on a 250 × 250 µm die in gf180mcuD, but most of that die is empty space.</p>
 <p>Shrink it. Choose the die size and placement density so that the design still passes signoff:</p>
 <ul>
   <li>die area ≤ <b>30,000 µm²</b> (baseline: 62,500)</li>

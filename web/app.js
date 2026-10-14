@@ -83,7 +83,7 @@ function openProblem(p) {
   current = p;
   history.replaceState(null, "", "?" + p.id);
   const how = p.kind === "rtl"
-    ? `Graded by formal equivalence: Yosys' SAT solver compares your design with a reference for <b>every</b> input sequence up to ${DEPTH} cycles after reset. If they ever differ, you get the exact cycle where they differ. Ctrl+Enter submits.`
+    ? `Graded by formal equivalence: Yosys' SAT solver compares your design with a reference for <b>every</b> input sequence: it tries to prove they match for all cycles, and otherwise checks the first ${DEPTH} cycles after reset. If they ever differ, you get the exact cycle where they differ. Ctrl+Enter submits.`
     : `You edit the knobs (JSON). The RTL is fixed. Allowed: <code>DIE_AREA</code> [x0, y0, x1, y1] in µm, <code>PL_TARGET_DENSITY_PCT</code>, <code>SYNTH_STRATEGY</code> (e.g. "AREA 0"), <code>GRT_ALLOW_CONGESTION</code>.`;
   $("statement").innerHTML = `<h1>${esc(p.title)}</h1>
     <div class="tags"><span class="tag diff ${p.difficulty}">${p.difficulty}</span>${p.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
@@ -155,7 +155,7 @@ async function submitRtl() {
     solved.add(p.id); store.set("solved", [...solved]); renderList();
     const kinds = res.stat?.kinds?.map(([k, n]) => `${n}× ${k}`).join(", ") || "";
     $("result").innerHTML = `<div class="banner ok big">✓ Accepted
-        <small>Matches the reference for every input sequence up to ${DEPTH} cycles after reset. ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
+        <small>${res.proved ? "Proved equal to the reference for all cycles after reset." : `Matches the reference for the first ${DEPTH} cycles after reset (a full proof was not possible).`} ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
       <p class="actions">${nextStep()}</p>
       ${res.stat?.cells ? `<p><b>${res.stat.cells}</b> generic cells after synthesis <span class="muted">(${esc(kinds)})</span></p>` : ""}
       <p><button id="harden" ${runnerInfo ? "" : "disabled"}>Take it to silicon (gf180)</button>

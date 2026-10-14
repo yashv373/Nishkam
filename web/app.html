@@ -113,6 +113,10 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
   <nav id="list"></nav>
   <section id="statement"></section>
   <section id="work">
+    <details id="svhelp" style="padding:6px 14px;font-size:12.5px;color:var(--muted);border-bottom:1px solid var(--line)">
+      <summary style="cursor:pointer">Which Verilog / SystemVerilog works?</summary>
+      <p style="margin:6px 0">Your code is read by Yosys. Verilog-2005 works, and so do common SystemVerilog parts: <code>always_ff</code>, <code>always_comb</code>, <code>logic</code> and <code>typedef enum</code>. Interfaces, packages and classes do not work. Use plain modules and ports.</p>
+    </details>
     <div id="editor"></div>
     <div class="bar">
       <button id="submit" class="primary">Submit</button>

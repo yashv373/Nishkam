@@ -350,7 +350,7 @@ footer a:hover { color: var(--ink); }
           <span class="pill">Easy</span>
           <h4>Up-counter with enable</h4>
           <p>Build a 4-bit up-counter. Synchronous active-high reset. Count when <code>en=1</code>, wrap from 15 to 0, hold otherwise.</p>
-          <p style="color:var(--dim)">Checked against a reference for every input sequence, 20 cycles deep.</p>
+          <p style="color:var(--dim)">Proved equal to a reference for every input sequence and every cycle after reset.</p>
         </div>
         <div>
           <div class="code" id="code"></div>
@@ -421,7 +421,7 @@ footer a:hover { color: var(--ink); }
           </svg>
           <div class="label">01 · Write</div>
           <h3>Real problems</h3>
-          <p>Write Verilog in a code editor. The problems are written by working chip designers.</p>
+          <p>Write Verilog in a code editor. The problems are written by a working IC designer.</p>
         </div>
         <div class="step">
           <svg class="draw" viewBox="0 0 300 130" aria-hidden="true">
@@ -431,7 +431,7 @@ footer a:hover { color: var(--ink); }
           </svg>
           <div class="label">02 · Prove</div>
           <h3>Checked, not sampled</h3>
-          <p>A solver tries every possible input for 20 cycles, so there are no hidden test cases. If something differs, you see the exact cycle.</p>
+          <p>A solver proves your design matches the reference for every input and every cycle after reset, so there are no hidden test cases. If something differs, you see the exact cycle.</p>
         </div>
         <div class="step">
           <svg class="draw" viewBox="0 0 300 130" aria-hidden="true">
@@ -568,7 +568,7 @@ const BAD = `<b>Wrong answer · cycle 13</b><table>
   <tr><td>cycle</td><td>10</td><td>11</td><td>12</td><td>13</td></tr>
   <tr><td>q expected</td><td>7</td><td>8</td><td>9</td><td>10</td></tr>
   <tr><td>q yours</td><td>7</td><td>8</td><td>9</td><td class="x">0</td></tr></table>`;
-const OK = `<b>Accepted</b>Matches the reference for every input sequence up to 20 cycles. 10 cells after synthesis.`;
+const OK = `<b>Accepted</b>Proved equal to the reference for every input, every cycle. 10 cells after synthesis.`;
 async function loop() {
   if (still) { code.innerHTML = hl(FIXED); return say("ok", OK); }
   for (;;) {

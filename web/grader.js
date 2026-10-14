@@ -4,9 +4,10 @@
 // bound, and a failing run hands back the exact counterexample as a VCD.
 // Runs anywhere @yowasp/yosys runs (browser worker or Node).
 
-export const DEPTH = 20; // ponytail: bounded check; designs with deeper state need -tempinduct or a larger bound
+export const DEPTH = 40; // fallback bounded check, used only when the induction proof is inconclusive
 
-export function gradeScript(p) {
+// induct=true: unbounded proof by temporal induction (up to 40 steps). Otherwise a plain DEPTH-cycle search.
+export function gradeScript(p, induct = false) {
   const rst = p.reset ? `-set-at 1 in_${p.reset.port} ${p.reset.active}` : "";
   return `
 read_verilog -sv ref.v
@@ -24,7 +25,7 @@ design -copy-from gate -as gate gate
 miter -equiv -flatten -make_outputs -ignore_gold_x gold gate miter
 hierarchy -top miter
 
-sat -verify -seq ${DEPTH} ${rst} -set-init-undef -enable_undef -set-def-inputs -prove trigger 0 -show-ports -dump_vcd cex.vcd miter
+sat -verify ${induct ? "-tempinduct -maxsteps 40" : ""} -seq ${DEPTH} ${rst} -set-init-undef -enable_undef -set-def-inputs -prove trigger 0 -show-ports -dump_vcd cex.vcd miter
 `;
 }
 
@@ -83,19 +84,24 @@ export function parseStat(text) {
 
 // Run one grade. runYosys/Exit come from @yowasp/yosys.
 export async function grade(runYosys, Exit, problem, userCode, log = () => {}) {
-  const files = { "ref.v": problem.reference, "user.v": userCode, "grade.ys": gradeScript(problem) };
   const out = [];
   const sink = (b) => { if (b) { const s = new TextDecoder().decode(b); out.push(s); log(s); } };
-  let passed, fsOut;
-  try {
-    fsOut = await runYosys(["-q", "-s", "grade.ys"], files, { stdout: sink, stderr: sink });
-    passed = true;
-  } catch (e) {
-    if (!(e instanceof Exit)) throw e;
-    passed = false; fsOut = e.files;
-  }
+  const run = async (induct) => {
+    try {
+      await runYosys(["-q", "-s", "grade.ys"], { "ref.v": problem.reference, "user.v": userCode, "grade.ys": gradeScript(problem, induct) }, { stdout: sink, stderr: sink });
+      return { passed: true };
+    } catch (e) {
+      if (!(e instanceof Exit)) throw e;
+      return { passed: false, fsOut: e.files };
+    }
+  };
+  // Try the unbounded proof first. If it fails it may only be an unreachable-state difference,
+  // so the bounded search decides: a counterexample there is real, a pass is only "first DEPTH cycles".
+  let r = await run(true), proved = r.passed;
+  if (!proved) { out.length = 0; r = await run(false); }
+  const { passed, fsOut } = r;
   const logText = out.join("");
-  const res = { passed, log: logText };
+  const res = { passed, proved, log: logText };
   if (!passed) {
     if (fsOut && fsOut["cex.vcd"]) res.cex = counterexample(fsOut["cex.vcd"]);
     else if (/Can't find gate module/.test(logText))

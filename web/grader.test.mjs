@@ -69,9 +69,13 @@ const ALT = {
 for (const p of PROBLEMS.filter((p) => p.kind === "rtl")) {
   const a = ALT[p.id];
   assert.ok(a, `no test answers for ${p.id}`);
+  const t0 = Date.now();
   const ref = await grade(runYosys, Exit, p, p.reference);
+  const ms = Date.now() - t0;
+  assert.ok(ref.proved, `${p.id}: reference should be PROVED for all cycles`);
   assert.ok(ref.passed, `${p.id}: reference must pass itself\n${ref.log}`);
   const good = await grade(runYosys, Exit, p, a.good);
+  console.log(`   ${p.id}: reference proved in ${ms} ms; alternative proved=${good.proved}`);
   assert.ok(good.passed, `${p.id}: alternative correct answer rejected\n${good.log}`);
   if (a.good2) {
     const g2 = await grade(runYosys, Exit, p, a.good2);
@@ -87,6 +91,12 @@ ${g2.log}`);
   assert.match(starter.error || "", /no logic yet/, `${p.id}: starter gives a raw Yosys message: ${starter.error}`);
   console.log(`ok ${p.id}  (cells=${good.stat.cells}, bug caught at cycle ${bad.cex.first})`);
 }
+// A design that is right for 25 cycles and then wrong must still fail (bounded depth is not enough).
+const late = await grade(runYosys, Exit, PROBLEMS[0], `module counter(input clk, input rst, input en, output reg [3:0] q);
+  reg [5:0] age; always @(posedge clk) if (rst) age <= 0; else if (age != 63) age <= age + 1;
+  always @(posedge clk) q <= rst ? 4'd0 : (age >= 30 ? q : q + {3'd0, en}); endmodule`);
+assert.ok(!late.passed && late.cex && late.cex.first > 25, `late-difference design must fail after cycle 25, got ${late.passed} ${late.cex?.first}`);
+console.log(`ok late bug caught at cycle ${late.cex.first}`);
 const broken = await grade(runYosys, Exit, PROBLEMS[0], "module counter(input clk; endmodule");
 assert.ok(!broken.passed && broken.error, "syntax error must be reported");
 console.log("ok syntax error ->", broken.error);

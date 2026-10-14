@@ -7,7 +7,7 @@ Practice digital chip design in the browser, from RTL to layout.
 
 ## What it does
 
-- **RTL problems** run entirely in your browser. You write Verilog and press Submit. Yosys, compiled to WebAssembly, checks your design against a reference for every possible input sequence up to 20 cycles after reset. If they differ, you see the exact cycle and inputs where your output is wrong. No install, no account.
+- **RTL problems** run entirely in your browser. You write Verilog and press Submit. Yosys, compiled to WebAssembly, proves your design equal to a reference for every input sequence and every cycle after reset (if a full proof cannot be completed, it checks the first 40 cycles and says so). If they differ, you see the exact cycle and inputs where your output is wrong. No install, no account.
 - **Physical design problems** run on your own computer. A small helper program takes your design from the page and runs LibreLane (gf180mcuD) in the [iic-osic-tools](https://github.com/iic-jku/iic-osic-tools) Docker container. You get signoff numbers and a picture of the layout back in the page.
 - Any RTL problem you solve can be sent through the full flow to see it as a chip.
 - **Nishkam Studio** (`studio.html`) is a browser IDE for the whole flow, from RTL to GDS, on gf180mcuD. It lints, simulates, synthesizes, times, places, routes, draws the layout, checks it (DRC) and compares it with the netlist (LVS). It runs in your browser with no install. With the local helper connected, the physical stages can run the real LibreLane flow instead.
@@ -92,7 +92,8 @@ Add an entry to `web/problems.js` with a statement, starter code and a reference
 ## Known limits
 
 - Reference answers are sent to the browser, so a determined user can read them. Grading has to move to a server before results count for hiring.
-- The RTL check covers 20 cycles after reset. A bug that only shows up later will be missed.
+- The RTL check tries a full proof (induction) first. If the proof cannot be completed, it checks the first 40 cycles after reset and the result says so; a bug that only shows up later could then be missed. All current problems are fully proved.
 - The local helper runs one job at a time.
-- Studio's in-browser flow has no clock tree. Placement and routing use the qflow tools (graywolf, qrouter), because OpenROAD has no WebAssembly build.
-- Studio's in-browser timing is our own estimate on the gf180 timing tables. It matched OpenSTA setup and hold slack on the test designs only.
+- Studio's in-browser timing is real OpenSTA. It uses one corner (tt_025C_5v00) and an ideal clock, so hold and skew numbers are not meaningful there.
+- Studio's in-browser flow has no clock tree yet (a browser port of OpenROAD's TritonCTS is in progress). With the local runner, LibreLane builds a real clock tree.
+- In-browser placement and routing (graywolf, qrouter) do not look at timing, so results differ from an OpenROAD run.
