@@ -21,3 +21,35 @@ assert(sta[0].required > sta[0].arrival && sta[0].rows.some((r) => r.fanout != n
 const hold = parseSta(demo("55-openroad-stapostpnr/max_ss_125C_4v50/min.rpt"));
 assert(hold.length > 0);
 console.log("sta", sta.length, "setup paths,", hold.length, "hold; ok");
+{
+  const { parseSrc, srcCovers, cellSrcMap } = await import("../stages.js");
+  assert.deepStrictEqual(parseSrc("a.v:12.3-14.5|b.v:3.1-3.9"), [{ file: "a.v", l1: 12, l2: 14 }, { file: "b.v", l1: 3, l2: 3 }]);
+  assert.deepStrictEqual(parseSrc("a.v:5.1-9"), [{ file: "a.v", l1: 5, l2: 5 }]);
+  assert.deepStrictEqual(parseSrc("C:\\x\\a.v:2.1-3.4"), [{ file: "C:\\x\\a.v", l1: 2, l2: 3 }]);
+  for (const bad of [undefined, "", "garbage", "a.v:x.y-z"]) assert.deepStrictEqual(parseSrc(bad), []);
+  assert.deepStrictEqual(parseSrc("junk|a.v:1.1-2.2"), [{ file: "a.v", l1: 1, l2: 2 }]);
+  const g = parseSrc("a.v:12.3-14.5");
+  assert(srcCovers(g, "a.v", 13) && !srcCovers(g, "a.v", 15) && !srcCovers(g, "b.v", 13) && !srcCovers([], "a.v", 1));
+  const cm = cellSrcMap('{"modules":{"m":{"cells":{"c1":{"type":"$and","attributes":{"src":"a.v:3.1-3.5"}},"c2":{"type":"x"}}}}}');
+  assert.equal(cm.get("c1").segs[0].l1, 3); assert.deepStrictEqual(cm.get("c2").segs, []); assert.equal(cellSrcMap("not json").size, 0);
+  const J = { modules: {
+    sub: { cells: { u0: { type: "$or", attributes: { src: "s.v:1.1-1.5" } } }, netnames: { x: { bits: [9], attributes: { src: "s.v:1.1-1.2" } } } },
+    top: { attributes: { top: 1 }, cells: { u0: { type: "$and", parameters: { Y_WIDTH: "00000000000000000000000000000001" }, attributes: { src: "a.v:12.3-12.9" }, port_directions: { A: "input", Y: "output" }, connections: { A: [2], Y: [4] } } },
+      netnames: { a: { bits: [2], attributes: { src: "a.v:2.1-2.9" } }, y: { bits: [4], attributes: { src: "a.v:3.1-3.9" } } } } } };
+  const c2 = cellSrcMap(JSON.stringify(J));
+  assert.equal(c2.get("u0").type, "$and"); assert.equal(c2.get("u0").width, 1); assert(!c2.nets.has("x"), "only the top module is indexed");
+  assert.equal(cellSrcMap(JSON.stringify({ modules: { sub: J.modules.sub } })).get("u0").type, "$or", "no top attribute: first module");
+  assert.deepStrictEqual(c2.nets.get("y").driver, [{ file: "a.v", l1: 12, l2: 12 }]);   // driven by the $and, not the declaration (line 3)
+  assert.deepStrictEqual(c2.nets.get("y").segs[0].l1, 3); assert.deepStrictEqual(c2.nets.get("a").driver, []);   // input port: declaration only
+  assert.deepStrictEqual(parseSrc("a.v:10.5"), [{ file: "a.v", l1: 10, l2: 10 }]);
+  assert.deepStrictEqual(parseSrc("C:/x/a.v:4.1-5.2"), [{ file: "C:/x/a.v", l1: 4, l2: 5 }]);
+  const { svgElOk, svgAttrOk, cssSafe } = await import("../stages.js");
+  for (const e of ["script", "foreignObject", "a", "set", "animate", "use", "image", "iframe"]) assert(!svgElOk(e), e);
+  for (const e of ["svg", "g", "path", "s:alias", "title"]) assert(svgElOk(e), e);
+  for (const [a, v] of [["href", "x"], ["xlink:href", "x"], ["onclick", "x"], ["attributeName", "onclick"], ["values", "javascript:1"], ["style", "fill:url(http://e/x)"]]) assert(!svgAttrOk(a, v), a);
+  assert(svgAttrOk("class", "net_1 width_1") && svgAttrOk("s:pid", "A") && svgAttrOk("style", "stroke-width: 1"));
+  assert.equal(cssSafe("@import url(http://e/a.css); svg{fill:none}"), " svg{fill:none}");
+  const cw = cellSrcMap('{"modules":{"m":{"cells":{"e":{"type":"$eq","parameters":{"A_WIDTH":"100","B_WIDTH":"100","Y_WIDTH":"1"}},"r":{"type":"$reduce_or","parameters":{"A_WIDTH":8,"Y_WIDTH":1}},"s":{"type":"$add","parameters":{"A_WIDTH":4,"Y_WIDTH":5}},"n":{"type":"$neg","parameters":{"A_WIDTH":4,"Y_WIDTH":4}}}}}}');
+  assert.deepStrictEqual(["e", "r", "s", "n"].map((k) => cw.get(k).width), [4, 8, 5, 4]);
+  console.log("src parser ok");
+}

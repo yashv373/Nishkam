@@ -20,6 +20,38 @@ export const STAGES = [
 // Engine ids a Properties dropdown may pick that differ from the file name:
 const ENGINE_FILE = { "verilator-wasm": "verilator-lint" };
 export const engineId = (s, o = {}) => { const e = (s.pick && o[s.pick]) || s.engine; return ENGINE_FILE[e] || e; };
+// Yosys `src` attribute -> [{file,l1,l2}]. "a.v:12.3-14.5|b.v:3.1-3.9"; "a.v:12.3-9" (same line) too. Bad pieces are skipped.
+export const parseSrc = (s) => String(s || "").split("|").flatMap((p) => {
+  const m = /^(.*):(\d+)\.\d+(?:-(?:(\d+)\.)?\d+)?$/.exec(p.trim());
+  return m ? [{ file: m[1], l1: +m[2], l2: +(m[3] || m[2]) }] : [];
+});
+const base = (f) => f.split(/[\\/]/).pop();
+export const srcCovers = (segs, file, line) => segs.some((g) => base(g.file) === base(file) && g.l1 <= line && line <= g.l2);
+// yosys JSON text -> Map(cell name -> {type, segs}) over all modules (the schematic ids are "cell_<name>")
+export function cellSrcMap(json) {
+  const m = new Map(), nets = new Map();
+  try { const mods = Object.values(JSON.parse(json).modules || {}), mod = mods.find((x) => Number(x.attributes?.top) === 1) || mods[0];   // netlistsvg draws this one only
+    const drv = new Map();   // bit -> src of the cell whose output drives it
+    for (const [n, c] of Object.entries(mod.cells || {})) { const segs = parseSrc(c.attributes?.src);
+      m.set(n, { type: c.type, segs, width: cellWidth(c.type, c.parameters) });
+      for (const [p, bits] of Object.entries(c.connections || {})) if (c.port_directions?.[p] === "output" && segs.length) for (const b of bits) if (!drv.has(b)) drv.set(b, segs); }
+    for (const [n, w] of Object.entries(mod.netnames || {})) nets.set(n, { bits: w.bits || [], segs: parseSrc(w.attributes?.src), driver: (w.bits || []).map((b) => drv.get(b)).find(Boolean) || [] }); } catch {}
+  m.nets = nets;   // net name -> {bits, segs}: the wire's declaration/driver line
+  return m;
+}
+const num = (v) => (typeof v === "string" ? parseInt(v, 2) : v);
+// comparators / reduces / logic ops: show the operand width, not the 1-bit result
+const cellWidth = (t, p = {}) => (/^\$(?:(?:eq|ne|lt|le|gt|ge)x?|reduce_.*|logic_.*)$/.test(t) ? Math.max(num(p.A_WIDTH) || 0, num(p.B_WIDTH) || 0) : num(p.Y_WIDTH ?? p.WIDTH ?? p.A_WIDTH)) || null;
+// SVG sanitizer allowlist: exactly what netlistsvg emits (checked) plus <title>. Anything else, and every href, is dropped.
+const SVG_EL = new Set("svg style g s:alias circle line path text rect title".split(" "));
+const SVG_AT = new Set("xmlns xmlns:xlink xmlns:s width height s:type transform s:width s:height id val r cx cy class s:x s:y s:pid d x y x1 x2 y1 y2 s:attribute s:generic style".split(" "));
+export const svgElOk = (name) => SVG_EL.has(name);
+export const svgAttrOk = (name, value) => SVG_AT.has(name) && !(name === "style" && /url\(|@import|expression/i.test(value));
+export const cssSafe = (css) => css.replace(/@import[^;]*;?|url\([^)]*\)/gi, "");
+const WORDS = { $add: "adder", $sub: "subtractor", $mul: "multiplier", $mux: "2:1 multiplexer", $pmux: "priority multiplexer", $eq: "equality comparator", $ne: "inequality comparator", $lt: "less-than comparator", $le: "less-or-equal comparator", $gt: "greater-than comparator", $ge: "greater-or-equal comparator",
+  $dff: "flip-flop", $adff: "flip-flop, async reset", $sdff: "flip-flop, sync reset", $dffe: "flip-flop with enable", $dlatch: "LATCH (usually unintended)", $and: "AND", $or: "OR", $xor: "XOR", $not: "NOT", $shl: "shift left", $shr: "shift right", $sshr: "arithmetic shift right",
+  $logic_and: "logical AND", $logic_or: "logical OR", $logic_not: "logical NOT", $memrd: "memory read", $memwr: "memory write", $mem: "memory", $mem_v2: "memory" };
+export const cellWords = (type, width) => { const t = String(type), w = WORDS[t] || (/^\$reduce_/.test(t) ? "reduce-" + t.slice(8) : /^\$a?dff|^\$sdff/.test(t) ? "flip-flop" : t); return w + (width ? `, ${width} bit` : ""); };
 const idx = (id) => STAGES.findIndex((s) => s.id === id);
 export const byId = (id) => STAGES[idx(id)];
 
