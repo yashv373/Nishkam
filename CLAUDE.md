@@ -67,7 +67,8 @@ you need to continue without asking the owner to explain again.
 ## Brand
 
 - Blue `#1430ff` (glow `#4a63ff`) on black. Helvetica Neue for text (Inter as fallback on Windows),
-  Bodoni Moda only for the blue "Invincible is just a word." band, Tiro Devanagari Hindi for निष्काम.
+  Tiro Devanagari Hindi for निष्काम. (The Bodoni "Invincible is just a word." band was replaced on the landing page
+  on 2026-10-15 by "What we are investigating next"; say "IC design / chip design", not "digital IC design".)
   The style is Apple-like liquid glass with Palantir/Framer-style black pages and large type.
 - `web/brand/mark.svg`: the N + न monogram. It has mirrored hairline circuit traces with vias on both ends
   of the bar; the traces were added by hand as SVG at the end of the file. viewBox `-20 0 2262 1686`.
@@ -105,7 +106,18 @@ Not yet verified:
 Open items:
 - Grading runs in the browser, so reference answers can be read. Move grading server-side before it is
   used for hiring or data licensing.
-- Make `squeeze-tiny8` harder: measure the smallest die that passes signoff and set the limit near it.
+- `squeeze-tiny8` limit is set (19,000 µm² at 24 ns; smallest measured pass 134×134, vault note "squeeze-tiny8 timing sweep").
+  Still to do: repeat runs at 136/137 µm to confirm a solver can reliably hit the limit (edge results are noisy).
+- Deploy cache skew: GitHub Pages caches files ~10 min, and workers/modules have no version in their URL, so right
+  after a push a returning visitor can run a new app.js with an old *.worker.js (seen 2026-10-15 as phantom route
+  failures). Import/export mismatches are caught by the stale-cache guard in studio.html/app.html; silent behaviour
+  skew is not. Fix later: stamp `?v=<sha>` on worker/module URLs in the pages.yml deploy step.
+- Studio access keys: hashes only in `web/studio/gate.js` (owner holds the plain keys). New key = random 12-char
+  code, hash it, add one line. Client-side gate, not security.
+- Vendor hosting: `web/vendor/` (77 MB) is served from GitHub Pages (soft limit ~100 GB/month, about 2-5k full Studio
+  sessions). jsDelivr was tried 2026-10-15 (branch `worktree-agent-a7ea2b6cdd385ce4d`, parked): it refuses openroad.wasm
+  (37 MB, 403 over size limit), surfer must stay same-origin (iframe), and cold-cache first fetches 404/time out. Only
+  21.5 MB would move. If traffic nears the limit, move the big files to Cloudflare R2 (free egress, no size cap).
 - Future learning tracks (research + browser ports): roadmap issue #11. DFT, PDK education, SoC integration
   (FuseSoC/Migen), IP packaging (Kactus2), GLS (Icarus), UVM-capable simulators, formal (SymbiYosys), analog, FPGA.
   DFT with donn/difetto is #10.
