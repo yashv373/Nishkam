@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { flow, DESIGNS } from "./pd.flow.mjs";
 import * as M from "./magic.worker.js";
 import * as L from "./lvs.worker.js";
+import * as S from "./opensta.worker.js";
 import { retriedNets } from "./route.worker.js";
 import { findShorts, shortsMessage } from "./shorts.js";
 // the short finder on a made-up node: two nets on one Magic node
@@ -23,10 +24,14 @@ for (const n of names) {
   let ok = r.failed === 0, lvs = "";
   if (ok && LVS.has(n)) {
     const top = DESIGNS[n][0], io = { log() {}, progress() {} };
-    const mg = await M.handle({ files: r.rt.files, options: { top, extract: true, drc: false, keepExt: true } }, io);
+    const mg = await M.handle({ files: r.rt.files, options: { top, extract: true, drc: false, keepExt: true, rc: n === "tiny8" } }, io);
     const lv = await L.handle({ files: { [top + ".spice"]: mg.files[top + ".spice"], [top + ".v"]: r.ct ? r.ct.files[top + "_cts.v"] : r.nl }, options: { top } }, io);
     const sh = findShorts(new TextDecoder().decode(mg.files[top + ".ext"]), new TextDecoder().decode(r.rt.files[top + "_route.def"]));
     ok = lv.summary.match === true && sh.length === 0; lvs = `, lvs ${lv.summary.match} devices ${lv.summary.devices} nets ${lv.summary.nets}`;
+    if (n === "tiny8") {   // post-route STA on Magic's SPEF (escaped net names once crashed OpenSTA)
+      const st = await S.handle({ files: { [top + ".v"]: r.ct.files[top + "_cts.v"], [top + ".spef"]: mg.files[top + ".spef"] }, options: { top, periodNs: 24, inputDelayNs: 4.8, outputDelayNs: 4.8, loadPf: 0.05, propagated: true } }, { ...io, log() {} });
+      ok = ok && Number.isFinite(st.summary.setup_ws_ns) && Number.isFinite(st.summary.hold_ws_ns); lvs += `, post-route setup ${st.summary.setup_ws_ns} hold ${st.summary.hold_ws_ns}`;
+    }
   }
   fail += !ok;
   if (!ok) console.log(r.out.split("\n").filter((l) => /^Error|Tap geometry|^Grid/.test(l)).slice(0, 12).join("\n"));

@@ -88,7 +88,9 @@ export async function handle({ files, options = {} }, { log, progress, raw }) {
   mod.FS.writeFile("/w/run.tcl", script(o, "/w/lib.lib", "/w/design.v", sf ? "/w/design.spef" : null));
   progress(0.3);
   const t0 = Date.now();
-  try { mod.callMain(["/w/run.tcl"]); } catch (e) { if (e?.status === undefined) throw e; }
+  try { mod.callMain(["/w/run.tcl"]); } catch (e) {
+    if (e?.status === undefined) throw new Error(`OpenSTA crashed while reading ${sf ? "the netlist and SPEF" : "the netlist"} (${typeof e === "number" ? "wasm exception " + e : e?.message || e}). Last output:\n` + out.slice(-8).join("\n"));
+  }
   const all = out.join("\n") + "\n";
   if (!all.includes("@@POWER")) throw new Error("OpenSTA failed:\n" + all.slice(-1500));
   const r = parse(all, o.periodNs);

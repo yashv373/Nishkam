@@ -65,6 +65,9 @@ export function parseRes(text) {
 // aF -> fF without float noise
 const fF = (aF) => String(+(aF / 1000).toPrecision(9));
 
+// Verilog-escaped id (backslash, name, backslash) to SPEF escaping of each bracket: a trailing backslash escapes the next space and crashed the OpenSTA reader
+const en = (s) => (/^\\.+\\$/.test(s) ? s.slice(1, -1).replace(/[\[\]\/:*|]/g, "\\$&") : s);
+
 // Returns {spef, nets: {name: {totalFF, caps, res}}}
 export function toSpef({ top, def, ext, res, lef = "", date = "" }) {
   const D = parseDef(def), E = parseExt(ext), R = parseRes(res), dirs = lef ? parseLefDirs(lef) : {};
@@ -78,7 +81,7 @@ export function toSpef({ top, def, ext, res, lef = "", date = "" }) {
   for (const [name, conns] of Object.entries(D.nets)) {
     for (const c of conns) {
       const magic = c.port ?? `${c.inst}.${c.pin}`;
-      const id = c.port ?? `${c.inst}:${c.pin}`;
+      const id = c.port ? en(c.port) : `${en(c.inst)}:${c.pin}`;
       spefName[magic] = id;
       const d = c.port ? ({ INPUT: "I", OUTPUT: "O" }[D.ports[c.port]?.dir] || "B")
         : ({ INPUT: "I", OUTPUT: "O" }[dirs[D.inst[c.inst]]?.[c.pin]] || "B");
@@ -104,13 +107,13 @@ export function toSpef({ top, def, ext, res, lef = "", date = "" }) {
     const sumR = Object.values(p.c).reduce((s, v) => s + v, 0);
     p.c[g] = (p.c[g] || 0) + ((total[g] ?? 0) - sumR); // remainder of the net's total sits on the main node
     const ids = {}; let k = 0;
-    const id = (n) => spefName[n] ?? (ids[n] ??= `${net}:${++k}`);
-    const cl = D.nets[net].map((c) => (c.port ? `*P ${c.port} ${ioDir[c.port]}` : `*I ${c.inst}:${c.pin} ${ioDir[`${c.inst}:${c.pin}`]}`));
+    const id = (n) => spefName[n] ?? (ids[n] ??= `${en(net)}:${++k}`);
+    const cl = D.nets[net].map((c) => (c.port ? `*P ${en(c.port)} ${ioDir[en(c.port)]}` : `*I ${en(c.inst)}:${c.pin} ${ioDir[`${en(c.inst)}:${c.pin}`]}`));
     let i = 0; const caps = [];
     for (const [n, c] of Object.entries(p.c)) if (c) caps.push(`${++i} ${id(n)} ${fF(c)}`);
     let j = 0; const rs = p.r.map(([a, b, r]) => `${++j} ${id(a)} ${id(b)} ${r}`);
     const tot = Object.values(p.c).reduce((s, v) => s + v, 0);
-    out.push(`*D_NET ${net} ${fF(tot)}`, "*CONN", ...cl, ...(caps.length ? ["*CAP", ...caps] : []), ...(rs.length ? ["*RES", ...rs] : []), "*END", "");
+    out.push(`*D_NET ${en(net)} ${fF(tot)}`, "*CONN", ...cl, ...(caps.length ? ["*CAP", ...caps] : []), ...(rs.length ? ["*RES", ...rs] : []), "*END", "");
     nets[net] = { totalFF: tot / 1000, caps: caps.length, res: rs.length };
   }
   return { spef: out.join("\n"), nets };
