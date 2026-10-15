@@ -21,6 +21,12 @@ assert(sta.some((p) => p.kind === "async") && sta.some((p) => p.kind === "data")
 assert(sta[0].required > sta[0].arrival && sta[0].rows.some((r) => r.fanout != null));
 const hold = parseSta(demo("55-openroad-stapostpnr/max_ss_125C_4v50/min.rpt"));
 assert(hold.length > 0);
+{
+  const mk = (end, tail) => `Startpoint: a (input port clocked by clk)\nEndpoint: ${end}\nPath Group: clk\n\n  1.0 1.0 ^ x/Z (buf)\n  1.0 data arrival time\n${tail}  0.5 slack (MET)\n`;
+  const d = parseSta(mk("err_recovery_reg (rising edge-triggered flip-flop clocked by clk)", "  9.0 data required time\n  -0.1 library setup time\n"));
+  const a = parseSta(mk("r (recovery check against rising-edge clock clk)", "  -0.2 library recovery time\n"));
+  assert.equal(d[0].kind, "data", "endpoint NAME containing recovery stays a data path"); assert.equal(a[0].kind, "async");
+}
 console.log("sta", sta.length, "setup paths,", hold.length, "hold; ok");
 {
   const { parseSrc, srcCovers, cellSrcMap } = await import("../stages.js");
