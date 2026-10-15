@@ -308,7 +308,7 @@ async function runFlow(p, files, knobs, target = $("result")) {
 checkRunner();
 
 // ---------- optional sign-in (backend v0). If the API is down, nothing here shows or throws. ----------
-const API = "http://localhost:8787"; // set to the deployed API (e.g. https://api.nishkam.world) when live
+const API = location.hostname === "localhost" ? "http://localhost:8787" : null; // null = no backend calls at all. Set to the deployed API (e.g. https://api.nishkam.world) when live
 let signedIn = false;
 const api = (path, body) => fetch(API + path, { credentials: "include", ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
 function recordSolve(problem, files) {
@@ -328,6 +328,7 @@ function showMe(me) {
   }
 }
 async function refreshMe() {
+  if (!API) return;
   try {
     const r = await api("/me");
     if (r.status === 401) return showMe(null);
