@@ -169,7 +169,7 @@ export async function runStages(ids, deps) {
       const r = await eng.run({ files, options: { ...deps.options(), ...st.opts, stage: id },
         onLog: (l) => { seen += l; deps.onLog(id, l); }, onProgress: (f) => deps.onProgress?.(id, f), signal: deps.signal });
       Object.assign(outputs, r.files || {});
-      for (const m of r.summary?.messages || []) if (!seen.includes(m.text))   // tool messages the engine did not print must still reach the Console
+      for (const m of r?.summary?.messages || []) if (typeof m?.text === "string" && !seen.includes(m.text))   // tool messages the engine did not print must still reach the Console
         deps.onLog(id, (m.severity === "error" ? "ERROR: " : "WARNING: ") + (m.file ? m.file + (m.line ? ":" + m.line : "") + ": " : "") + m.text);
       deps.onResult?.(id, r);
       if (!r.ok) ok = false;
