@@ -148,8 +148,14 @@ export function place2def(top, files, fillCell, numLayersReq) {
       const ppx = horiz ? pitchx : hskip * pitchx, ppy = horiz ? vskip * pitchy : pitchy;
       let cx = idiv(llx + urx, 2) - cellxbot - hpx, cy = idiv(lly + ury, 2) - cellybot - hpy;
       let gx = (1 + Math.floor(cx / ppx)) * ppx, gy = (1 + Math.floor(cy / ppy)) * ppy;
-      while (used.has(gx + "," + gy)) { if (horiz) gy += ppy; else gx += ppx; }
-      used.add(gx + "," + gy);
+      // Pads are 0.39 um square and M2/M3 spacing is 0.28 um, so pads on neighbouring tracks block each other (qrouter: "no taps"):
+      // keep a free track between pads on one edge, and keep every pad inside the die (graywolf's rounding can put it on or past the edge).
+      const lo = horiz ? dieybot + pitchy : diexbot + pitchx, hi = horiz ? dieytop - pitchy : diextop - pitchx, st = horiz ? ppy : ppx;
+      const key = (a, b) => (horiz ? `${a},${b}` : `${b},${a}`), pos = horiz ? gy : gx, fixed = horiz ? gx : gy;
+      let v = Math.min(Math.max(pos, lo), hi), tries = 0;
+      while ([-1, 0, 1].some((k) => used.has(key(fixed, v + k * st))) && tries++ < 10000) { v += st; if (v > hi) v = lo; }
+      if (horiz) gy = v; else gx = v;
+      used.add(key(fixed, v));
       pinLines.push(`- ${lab} + NET ${lab}`, `  + LAYER ${horiz ? hlayer : vlayer} ( 0 0 ) ( 1 1 )`, `  + PLACED ( ${O(gx)} ${O(gy)} ) N ;`);
     } else if (inst.startsWith("twfeed")) { fill.push([inst, fillCell]); }
     else {

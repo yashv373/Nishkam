@@ -347,11 +347,12 @@ async function loadEngine(s) {
 const PD = {};   // raw engine files between stages: place -> route -> magic
 const NOT_LL = "Experimental: qflow tools (graywolf, qrouter, Magic) on gf180, not LibreLane signoff. The qflow setup shipped in the PDK is outdated (it names cells such as dffq_x1 that do not exist), so Nishkam drives the tools itself.";
 // Cells qrouter cannot reach on gf180 7t (xor2_1 pin A1 unreachable, and4_1 stub short): kept out of synthesis for the browser physical path only.
-const QROUTER_DONT_USE = ["gf180mcu_fd_sc_mcu7t5v0__xor2_1", "gf180mcu_fd_sc_mcu7t5v0__and4_1"];
+const QROUTER_DONT_USE = ["xor2_1", "and4_1", "oai21_1", "oai22_1", "oai31_1", "oai32_1", "oai33_1", "oai211_1", "oai221_1", "oai222_1"].map((c) => "gf180mcu_fd_sc_mcu7t5v0__" + c);
+const BROWSER_PD_CELLS = 5000;   // measured: a registered 20x20 multiplier (5260 cells with clock-tree room) places and routes with 0 failed nets in ~2 min
 const pre = (dir, files) => Object.fromEntries(Object.entries(files).map(([n, d]) => [`browser/${dir}/${n}`, d]));
 // qrouter names nets like the DEF: user names stay, yosys internals (_12_, $abc...) are called "internal net".
 const routeMsg = (s) => { const nm = (s.failedNames || []).map((n) => (/^[_$]/.test(n) ? "internal net" : n)), shown = [...new Set(nm)].slice(0, 6).join(", ");
-  return `qrouter could not route ${s.failedNets} nets${shown ? " (" + shown + (nm.length > 6 ? ", ..." : "") + ")" : ""}; try a larger die or lower density, or use the local runner (LibreLane).`; };
+  return `qrouter could not route ${s.failedNets} nets${shown ? " (" + shown + (nm.length > 6 ? ", ..." : "") + ")" : ""}. The browser router has no die or density setting (the die is sized automatically). Try another Synthesis strategy in Properties, or use the local runner (LibreLane).`; };
 // SDC from Properties: delays default to 20% of the period like LibreLane.
 const staOpts = () => {
   const p = +opts.clockPeriod; if (!(p > 0)) throw new Error("Set a clock period above 0 in Properties.");
@@ -381,6 +382,10 @@ async function localStage(id, io) {
   const m = await import(`./engines/${eng}.js`);
   const a = { onLog: io.onLog, onProgress: io.onProgress, signal: io.signal };
   let r;
+  if (id === "place") {
+    const nc = (need(outputs["netlist.v"], "Synthesis").match(/^\s*gf180mcu_\w+\s+\S+\s*\(/gm) || []).length;
+    if (nc > BROWSER_PD_CELLS) io.onLog(`WARNING: ${nc} cells. In-browser place and route is for small designs: it was routed cleanly up to about ${BROWSER_PD_CELLS} cells (about 2 minutes) and is untested above that. For larger designs use the local runner (LibreLane).`);
+  }
   if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout, headroom: [0.1, 600] } });
   else if (id === "cts") {   // placed DEF + the same SDC as Timing -> DEF with the clock tree and a netlist that has the clock buffers
     const pl = need(PD.place, "Placement");
