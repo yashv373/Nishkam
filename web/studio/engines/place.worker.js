@@ -114,13 +114,16 @@ export function place2def(top, files, fillCell, numLayersReq) {
   let diextop = Math.floor((xtop - cellxbot + hpx) / pitchx) * pitchx;
   let dieytop = Math.floor((ytop - cellybot + hpy) / pitchy) * pitchy;
   const O = (v) => r(v * mult);
+  // Routing grid shifted by 0.14 um (a quarter track) in x and y, pads with it. On the library's own grid several cells (oai21_2, mux2, aoi22, ...)
+  // have inputs whose stubs land on a neighbouring pin: Magic then finds shorted nets. Measured: adder, tiny8, mult8, two-clock all LVS-clean with this shift.
+  const shx = r(scale * 0.14), shy = r(scale * 0.14);
   const def = [`VERSION 5.6 ;`, `DIVIDERCHAR "/" ;`, `BUSBITCHARS "[]" ;`, `DESIGN ${top} ;`, `UNITS DISTANCE MICRONS ${oscale} ;`, ``,
     `DIEAREA ( ${O(diexbot)} ${O(dieybot)} ) ( ${O(diextop)} ${O(dieytop)} ) ;`, ``];
   const width = diextop - diexbot, height = dieytop - dieybot;
   for (let i = 0; i < numlayers; i++) {
     const L = metal[i], mp = scale * L.pitch, omp = r(mp * mult);
-    def.push(L.orient === "vertical" ? `TRACKS X ${O(diexbot)} DO ${1 + Math.trunc(width / mp)} STEP ${omp} LAYER ${L.name} ;`
-      : `TRACKS Y ${O(dieybot)} DO ${1 + Math.trunc(height / mp)} STEP ${omp} LAYER ${L.name} ;`);
+    def.push(L.orient === "vertical" ? `TRACKS X ${O(diexbot + shx)} DO ${1 + Math.trunc(width / mp)} STEP ${omp} LAYER ${L.name} ;`
+      : `TRACKS Y ${O(dieybot + shy)} DO ${1 + Math.trunc(height / mp)} STEP ${omp} LAYER ${L.name} ;`);
   }
   def.push(``);
   // obstructions along the die edge (appended to .obs; addspacers later rewrites it as .obsx)
@@ -162,7 +165,7 @@ export function place2def(top, files, fillCell, numLayersReq) {
       // across the edge too: a pad on or past the die edge (graywolf puts top/right pads there) is not reachable (qrouter: "Failure to find route start node")
       if (horiz) { gy = found; gx = Math.min(Math.max(gx, diexbot + pitchx), diextop - pitchx); } else { gx = found; gy = Math.min(Math.max(gy, dieybot + pitchy), dieytop - pitchy); }
       pads.push([gx, gy]);
-      pinLines.push(`- ${lab} + NET ${lab}`, `  + LAYER ${horiz ? hlayer : vlayer} ( 0 0 ) ( 1 1 )`, `  + PLACED ( ${O(gx)} ${O(gy)} ) N ;`);
+      pinLines.push(`- ${lab} + NET ${lab}`, `  + LAYER ${horiz ? hlayer : vlayer} ( 0 0 ) ( 1 1 )`, `  + PLACED ( ${O(gx + shx)} ${O(gy + shy)} ) N ;`);
     } else if (inst.startsWith("twfeed")) { fill.push([inst, fillCell]); }
     else {
       const mm = inst.match(/([^\s:]+):(.+)$/); // cellname:instance
