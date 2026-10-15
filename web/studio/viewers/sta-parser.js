@@ -11,7 +11,7 @@ export function parseSta(text, maxPaths = 3000) {
     const num = (re) => { const m = re.exec(b); return m ? +m[1] : NaN; };
     const p = {
       start: L[0].split(" ")[0], end: end[1], clock: end[2] || (/clocked by (\S+)\)/.exec(L[0]) || [])[1] || "",
-      slack: +sl[1], met: sl[2] === "MET", kind: /^Endpoint:.*(?:recovery|removal)/m.test(b) ? "async" : "data",   // async reset recovery/removal check vs a normal data (D) check
+      slack: +sl[1], met: sl[2] === "MET", kind: /^\s*Endpoint:\s+\S+\s+\((?:recovery|removal) check|library (?:recovery|removal) time/m.test(b) ? "async" : "data",   // async reset recovery/removal check vs a normal data (D) check
       arrival: num(/^\s*(-?[\d.]+)\s+data arrival time/m), required: num(/^\s*(-?[\d.]+)\s+data required time/m),
       rows: [],
     };
