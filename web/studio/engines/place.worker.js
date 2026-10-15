@@ -140,7 +140,7 @@ export function place2def(top, files, fillCell, numLayersReq) {
   const ostr = ["N", "FS", "FN", "S", "FE", "FW", "W", "E"];
   const vlayer = vert2 ? m2.name : numlayers < 3 ? m1.name : metal[2].name, hlayer = vert2 ? (numlayers < 3 ? m1.name : metal[2].name) : m2.name;
   const hskip = vert2 ? m2.skip : numlayers < 3 ? m1.skip : metal[2].skip, vskip = vert2 ? (numlayers < 3 ? m1.skip : metal[2].skip) : m2.skip;
-  const pinLines = [], used = new Set(), fill = [];
+  const pinLines = [], pads = [], fill = [];
   for (const t of pl1) {
     const inst = t[0]; let [llx, lly, urx, ury, orient, row] = t.slice(1).map(Number);
     if (inst.startsWith("twpin_")) {
@@ -150,12 +150,17 @@ export function place2def(top, files, fillCell, numLayersReq) {
       let gx = (1 + Math.floor(cx / ppx)) * ppx, gy = (1 + Math.floor(cy / ppy)) * ppy;
       // Pads are 0.39 um square and M2/M3 spacing is 0.28 um, so pads on neighbouring tracks block each other (qrouter: "no taps"):
       // keep a free track between pads on one edge, and keep every pad inside the die (graywolf's rounding can put it on or past the edge).
-      const lo = horiz ? dieybot + pitchy : diexbot + pitchx, hi = horiz ? dieytop - pitchy : diextop - pitchx, st = horiz ? ppy : ppx;
-      const key = (a, b) => (horiz ? `${a},${b}` : `${b},${a}`), pos = horiz ? gy : gx, fixed = horiz ? gx : gy;
-      let v = Math.min(Math.max(pos, lo), hi), tries = 0;
-      while ([-1, 0, 1].some((k) => used.has(key(fixed, v + k * st))) && tries++ < 10000) { v += st; if (v > hi) v = lo; }
-      if (horiz) gy = v; else gx = v;
-      used.add(key(fixed, v));
+      const st = horiz ? ppy : ppx;   // pad grid: multiples of st (graywolf rounding above), so snap the limits onto it
+      const lo = Math.ceil(((horiz ? dieybot : diexbot) + (horiz ? pitchy : pitchx)) / st) * st, hi = Math.floor(((horiz ? dieytop : diextop) - (horiz ? pitchy : pitchx)) / st) * st;
+      const pos = horiz ? gy : gx, n = Math.floor((hi - lo) / st) + 1;
+      // gap = 2 tracks apart (or the same edge position) on both axes; relaxed = just not on the same or an adjacent grid point
+      const clash = (x, y, g) => pads.some(([ux, uy]) => Math.abs(x - ux) < g * pitchx && Math.abs(y - uy) < g * pitchy);
+      const at = (v) => (horiz ? [gx, v] : [v, gy]);
+      let v0 = Math.min(Math.max(Math.round((pos - lo) / st), 0), n - 1), found = null;
+      for (const g of [2, 1]) { for (let i = 0; i < n && found === null; i++) { const v = lo + ((v0 + i) % n) * st; if (!clash(...at(v), g)) found = v; } if (found !== null) break; }
+      if (found === null) throw new Error(`Too many ports (${pins.length}) for the die edge: no free pad position left for ${lab}.`);
+      if (horiz) gy = found; else gx = found;
+      pads.push([gx, gy]);
       pinLines.push(`- ${lab} + NET ${lab}`, `  + LAYER ${horiz ? hlayer : vlayer} ( 0 0 ) ( 1 1 )`, `  + PLACED ( ${O(gx)} ${O(gy)} ) N ;`);
     } else if (inst.startsWith("twfeed")) { fill.push([inst, fillCell]); }
     else {
