@@ -149,7 +149,7 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
 (function(){function bad(){if(window.__nkBoot||window.__nkGuard)return;window.__nkGuard=1;var k='nk:reloaded',t=0;try{t=sessionStorage.getItem(k)}catch(e){}
 if(!t){try{sessionStorage.setItem(k,'1')}catch(e){}Promise.all(performance.getEntriesByType('resource').filter(function(e){return/\.m?js(\?|$)/.test(e.name)&&e.name.indexOf(location.origin)==0}).map(function(e){return fetch(e.name,{cache:'reload'}).catch(function(){})})).then(function(){location.reload()});return}
 var d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:grid;place-items:center;background:#000;color:#fff;font:16px sans-serif;text-align:center;padding:24px;z-index:99';d.textContent='Nishkam was just updated. Reload the page (Ctrl+Shift+R).';document.body.appendChild(d)}
-addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(e.message))bad()});addEventListener('load',function(){setTimeout(function(){if(window.__nkBoot)try{sessionStorage.removeItem('nk:reloaded')}catch(e){}},9000)})})();</script>
+addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(e.message)&&(/^module import failed/.test(e.message)||(e.filename||'').indexOf(location.origin)==0))bad()});addEventListener('load',function(){setTimeout(function(){if(window.__nkBoot)try{sessionStorage.removeItem('nk:reloaded')}catch(e){}},9000)})})();</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

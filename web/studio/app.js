@@ -605,7 +605,7 @@ const models = {};
 let staleLater = false, tabEx = false, undo = null;
 function swapProject(name, files, o, msg) {
   project.replace(files, name); Object.assign(opts, o); store.set("studio:opts", opts);
-  for (const k in models) { models[k].dispose(); delete models[k]; }
+  editor?.setModel(null); for (const k in models) { models[k].dispose(); delete models[k]; }
   $("projName").value = project.name; buildProps(); markStale(); cons.log("files", msg);
   tabEx = false; openF(project.list()[0]);
 }
