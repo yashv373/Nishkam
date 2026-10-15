@@ -103,6 +103,41 @@
 if(!t){try{sessionStorage.setItem(k,'1')}catch(e){}Promise.all(performance.getEntriesByType('resource').filter(function(e){return/\.m?js(\?|$)/.test(e.name)&&e.name.indexOf(location.origin)==0}).map(function(e){return fetch(e.name,{cache:'reload'}).catch(function(){})})).then(function(){location.reload()});return}
 var d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:grid;place-items:center;background:#000;color:#fff;font:16px sans-serif;text-align:center;padding:24px;z-index:99';d.textContent='Nishkam was just updated. Reload the page (Ctrl+Shift+R).';document.body.appendChild(d)}
 addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(e.message))bad()});addEventListener('load',function(){setTimeout(function(){if(window.__nkBoot)try{sessionStorage.removeItem('nk:reloaded')}catch(e){}},9000)})})();</script>
-<script type="module" src="studio/app.js"></script>
+<div id="gate" hidden><form class="gatecard" id="gateForm" autocomplete="off">
+  <span class="pmark" role="img" aria-label="Nishkam"></span>
+  <h1>Nishkam Studio is invite-only for now.</h1>
+  <p>Enter your access key.</p>
+  <input id="gateKey" type="text" inputmode="numeric" pattern="[0-9]*" aria-label="Access key" autofocus>
+  <button class="pbtn pri" type="submit">Enter</button>
+  <p id="gateErr" role="alert"></p>
+</form></div>
+<div id="gateToast" hidden></div>
+<style>
+#gate{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:#000;padding:16px}
+#gate[hidden],#gateToast[hidden]{display:none}
+.gatecard{display:flex;flex-direction:column;align-items:center;gap:12px;max-width:380px;width:100%;padding:28px 24px;text-align:center;border:1px solid var(--line-hi,#2a3070);border-radius:20px;background:rgba(20,48,255,.08);backdrop-filter:blur(18px);color:#fff}
+.gatecard h1{font-size:20px;margin:0}.gatecard p{margin:0;color:#9aa3d6}
+.gatecard input{width:100%;height:42px;text-align:center;font-size:18px;letter-spacing:.2em;border-radius:12px;border:1px solid #2a3070;background:#05071a;color:#fff}
+.gatecard .pbtn{background:#1430ff;color:#fff;border:0;border-radius:12px;height:40px;padding:0 28px;cursor:pointer}
+#gateErr{color:#ff8a8a!important;min-height:1.2em}
+#gateToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;padding:10px 18px;border-radius:12px;background:#1430ff;color:#fff;font:14px sans-serif}
+</style>
+<script type="module">
+// Client-side gate, not security (see studio/gate.js). app.js is only loaded after a good key; #demo=... stays in the URL and applies at boot.
+import { check, remember, remembered } from "./studio/gate.js";
+const boot = () => import("./studio/app.js").catch((e) => dispatchEvent(new ErrorEvent("error", { message: "module import failed: " + e.message })));
+const $ = (i) => document.getElementById(i);
+if (remembered()) boot();
+else {
+  $("gate").hidden = false; $("gateKey").focus();
+  $("gateForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const k = $("gateKey").value, m = await check(k);
+    if (!m) { $("gateErr").textContent = "That key did not work. Ask the person who shared Nishkam with you."; return; }
+    await remember(k); $("gate").hidden = true; $("gateToast").textContent = m; $("gateToast").hidden = false;
+    setTimeout(() => { $("gateToast").hidden = true; }, 3000); boot();
+  };
+}
+</script>
 </body>
 </html>
