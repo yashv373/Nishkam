@@ -7,6 +7,7 @@ import { createProject, EXAMPLES } from "./files.js";
 import * as R from "./runner-client.js";
 import { PROBLEMS } from "../problems.js";
 import { createTour } from "./tour.js";
+window.__nkBoot = 1;
 import { sdc } from "./engines/opensta.js";
 
 const $ = (id) => document.getElementById(id);
@@ -442,7 +443,8 @@ async function localStage(id, io) {
     sum.sta = {};
     const { x, files } = await staRun("pre-layout", { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, io);
     if (x.error) io.onLog("ERROR: OpenSTA (" + x.key + "):\n" + x.error);
-    return { ok: !x.error, files, staRuns: [x], summary: x.error ? { error: x.error.split("\n")[0] } : x.summary };
+    const noClk = !hasPort(outputs["netlist.v"], opts.clockPort);
+    return { ok: !x.error, ...(noClk && !x.error ? { state: "warn", info: "no clock port" } : {}), files, staRuns: [x], summary: x.error ? { error: x.error.split("\n")[0] } : x.summary };
   }
   const eng = { place: "place", cts: "cts", route: "route", signoff: "magic" }[id];
   const m = await import(`./engines/${eng}.js`);
@@ -602,7 +604,7 @@ function swapProject(name, files, o, msg) {
   tabEx = false; openF(project.list()[0]);
 }
 function loadExample(ex) {
-  undo = { name: project.name, files: project.all(), o: { top: opts.top, tb: opts.tb } };
+  undo = { name: project.name, files: project.all(), o: { ...opts } };
   swapProject(ex.name, ex.files, { top: ex.top, tb: ex.tb, ...ex.opts }, `Loaded example ${ex.name} (your previous files were replaced).`);
 }
 function undoLoad() { const u = undo; undo = null; if (u) swapProject(u.name, u.files, u.o, "Restored your previous files."); }
