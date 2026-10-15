@@ -21,3 +21,16 @@ assert(sta[0].required > sta[0].arrival && sta[0].rows.some((r) => r.fanout != n
 const hold = parseSta(demo("55-openroad-stapostpnr/max_ss_125C_4v50/min.rpt"));
 assert(hold.length > 0);
 console.log("sta", sta.length, "setup paths,", hold.length, "hold; ok");
+{
+  const { parseSrc, srcCovers, cellSrcMap } = await import("../stages.js");
+  assert.deepStrictEqual(parseSrc("a.v:12.3-14.5|b.v:3.1-3.9"), [{ file: "a.v", l1: 12, l2: 14 }, { file: "b.v", l1: 3, l2: 3 }]);
+  assert.deepStrictEqual(parseSrc("a.v:5.1-9"), [{ file: "a.v", l1: 5, l2: 5 }]);
+  assert.deepStrictEqual(parseSrc("C:\\x\\a.v:2.1-3.4"), [{ file: "C:\\x\\a.v", l1: 2, l2: 3 }]);
+  for (const bad of [undefined, "", "garbage", "a.v:x.y-z"]) assert.deepStrictEqual(parseSrc(bad), []);
+  assert.deepStrictEqual(parseSrc("junk|a.v:1.1-2.2"), [{ file: "a.v", l1: 1, l2: 2 }]);
+  const g = parseSrc("a.v:12.3-14.5");
+  assert(srcCovers(g, "a.v", 13) && !srcCovers(g, "a.v", 15) && !srcCovers(g, "b.v", 13) && !srcCovers([], "a.v", 1));
+  const cm = cellSrcMap('{"modules":{"m":{"cells":{"c1":{"type":"$and","attributes":{"src":"a.v:3.1-3.5"}},"c2":{"type":"x"}}}}}');
+  assert.equal(cm.get("c1").segs[0].l1, 3); assert.deepStrictEqual(cm.get("c2").segs, []); assert.equal(cellSrcMap("not json").size, 0);
+  console.log("src parser ok");
+}

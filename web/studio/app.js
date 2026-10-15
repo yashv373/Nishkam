@@ -1,5 +1,5 @@
 // Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
-import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS } from "./stages.js";
+import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords } from "./stages.js";
 import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
@@ -267,15 +267,66 @@ function showSchematic(svg) {
   const bar = h("div", "sbar");
   for (const [k, t] of [["rtl", "RTL (readable)"], ["gate", "Gate level"]]) { const b = h("button", opts.schematic === k ? "on" : "", t);
     b.onclick = () => { if (running) return; opts.schematic = k; store.set("studio:opts", opts); start(["schematic"]); }; bar.append(b); }
-  const vp = h("div", "svp"), inner = h("div", "sin");
-  inner.append(Object.assign(new Image(), { src: URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })), alt: "Schematic", draggable: false }));
-  vp.append(inner); el.append(bar, vp);
+  const vp = h("div", "svp"), inner = h("div", "sin"), peek = h("div", "speek");
+  const sh = inner.attachShadow({ mode: "open" });   // shadow root: the SVG's own <style> (svg{fill:none}, text{...}) must not leak into the page
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml"), root = doc.documentElement;
+  if (root.localName !== "svg") return emptyCard(el, "Schematic could not be shown", "The SVG did not parse.");
+  for (const n of [...root.querySelectorAll("script,foreignObject")]) n.remove();   // cell names come from user RTL
+  for (const n of [root, ...root.querySelectorAll("*")]) for (const a of [...n.attributes]) if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) n.removeAttribute(a.name);
+  const st = document.createElement("style");
+  st.textContent = "svg{display:block}.xhl>:not(text){stroke:#ff6a00!important;stroke-width:2.5px}.xnet{stroke:#ff6a00!important;stroke-width:3px!important}g[id^=cell_]{cursor:pointer}line,path{pointer-events:stroke}";
+  sh.append(document.importNode(root, true), st);
+  const svgEl = sh.firstChild, cells = [...svgEl.querySelectorAll("g[id^=cell_]")], meta = schemMeta;
+  const info = (g) => meta.get(g.id.slice(5));
+  const NS = "http://www.w3.org/2000/svg", nets = meta.nets || new Map();
+  for (const g of cells) { const i = info(g), s0 = i?.segs[0];   // hover tooltip: plain-words type + first file:line
+    g.prepend(Object.assign(document.createElementNS(NS, "title"), { textContent: `${i ? cellWords(i.type, i.width) : g.getAttribute("s:type") || "cell"}${s0 ? `  ${s0.file}:${s0.l1}` : ""}` })); }
+  const clear = () => { for (const n of sh.querySelectorAll(".xhl,.xnet")) n.classList.remove("xhl", "xnet"); };
+  const fmt = (segs) => segs.map((q) => `${q.file}:${q.l1}${q.l2 > q.l1 ? "-" + q.l2 : ""}`).join(", ");
+  const show = (segs, title, none) => {   // the source peek under the schematic (Editor and Schematic are tabs of one pane, so we do not switch away)
+    peek.replaceChildren(); if (title == null) return;
+    if (!segs.length) return peek.append(h("span", "muted", `${title}: ${none || "no source location (gate-level cell)"}`));
+    const g = segs[0], f = projFile(g.file), src = (f ? project.get(f) : "").split("\n");
+    const go = h("button", "", "Go to code"); go.onclick = () => gotoSrc(segs);
+    peek.append(h("b", "", `${title}  ${fmt(segs)}`), go, h("pre", "", src.slice(g.l1 - 1, Math.min(g.l2, g.l1 + 7)).join("\n")));
+  };
+  const hiNet = (name) => { const bits = new Set((nets.get(name)?.bits || []).map(String)); if (!bits.size) return false;   // wires/ports named by their yosys net
+    for (const n of sh.querySelectorAll("[class]")) { const m = /(?:^|\s)net_([\d_]+)(?:\s|$)/.exec(n.getAttribute("class")); if (m && m[1].split("_").some((b) => bits.has(b))) n.classList.add("xnet"); }
+    return true; };
+  const netOf = (bit) => [...nets].find(([n, v]) => !n.startsWith("$") && v.bits.map(String).includes(bit)) || [...nets].find(([, v]) => v.bits.map(String).includes(bit));
+  schem = { root: sh, cells, info };
+  schem.byLine = (file, line) => { clear(); for (const g of cells) if (srcCovers(info(g)?.segs || [], file, line)) g.classList.add("xhl"); };
+  schem.byWord = (w) => { if (nets.has(w)) { clear(); return hiNet(w); } };
+  const pick = (t) => {   // a click (no drag) on a cell, a wire, or empty space
+    clear(); const g = t?.closest?.("g[id^=cell_]"), nc = [...(t?.classList || [])].find((c) => /^net_/.test(c));
+    const net = (name) => { const segs = nets.get(name)?.segs || []; hiNet(name); show(segs, "net " + name, "no source location for this net"); markSrc(segs); };
+    if (g) { const i = info(g); g.classList.add("xhl");
+      if (i) { show(i.segs, cellWords(i.type, i.width)); markSrc(i.segs); } else if (nets.has(g.id.slice(5))) net(g.id.slice(5)); else show([], g.getAttribute("s:type") || "cell"); }   // port cells are named like their net
+    else if (nc) { const e = netOf(nc.slice(4).split("_")[0]); e ? net(e[0]) : show([], null); }
+    else { show([], null); markSrc([]); }
+  };
+  vp.append(inner); el.append(bar, vp, peek);
   let k = 1, x = 0, y = 0; const put = () => { inner.style.transform = `translate(${x}px,${y}px) scale(${k})`; };
   vp.onwheel = (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(), f = e.deltaY < 0 ? 1.15 : 1 / 1.15, px = e.clientX - r.left, py = e.clientY - r.top;
     x = px - (px - x) * f; y = py - (py - y) * f; k *= f; put(); };
-  vp.onpointerdown = (e) => { vp.setPointerCapture(e.pointerId); const sx = e.clientX - x, sy = e.clientY - y;
+  vp.onpointerdown = (e) => { const t = e.composedPath()[0]; vp.setPointerCapture(e.pointerId); const sx = e.clientX - x, sy = e.clientY - y, x0 = e.clientX, y0 = e.clientY;
     const mv = (m) => { x = m.clientX - sx; y = m.clientY - sy; put(); }; vp.addEventListener("pointermove", mv);
-    vp.addEventListener("pointerup", () => vp.removeEventListener("pointermove", mv), { once: true }); };
+    vp.addEventListener("pointerup", (u) => { vp.removeEventListener("pointermove", mv); if (Math.hypot(u.clientX - x0, u.clientY - y0) < 4) pick(t); }, { once: true }); };
+}
+// Schematic <-> source. schemMeta: cell name -> {type, segs} from the yosys JSON of the drawn view.
+let schem = null, schemMeta = new Map(), srcDec = null, quiet = false;
+const modelOf = (n) => (models[n] ||= monaco.editor.createModel(project.get(n), "systemverilog"));
+const projFile = (f) => project.list().find((n) => n === f || n.split("/").pop() === f.split(/[\\/]/).pop());
+function markSrc(segs) {   // highlight the line ranges in Monaco (models only; the editor view is not switched)
+  if (!window.monaco) return;
+  srcDec?.m.isDisposed() || srcDec?.m.deltaDecorations(srcDec.ids, []); srcDec = null;
+  const g = segs.find((q) => projFile(q.file)); if (!g) return;
+  const m = modelOf(projFile(g.file));
+  srcDec = { m, ids: m.deltaDecorations([], segs.filter((q) => projFile(q.file) === projFile(g.file)).map((q) => ({ range: new monaco.Range(q.l1, 1, q.l2, 1), options: { isWholeLine: true, className: "xp-line" } }))) };
+}
+function gotoSrc(segs) {
+  const g = segs.find((q) => projFile(q.file)); if (!g || !editor) return;
+  markSrc(segs); showTab("Editor"); openF(projFile(g.file)); quiet = true; editor.revealLineInCenter(g.l1); editor.setPosition({ lineNumber: g.l1, column: 1 }); quiet = false; editor.focus();
 }
 
 // Surfer may drop a message sent before its wasm is ready, so send the VCD a few times.
@@ -339,6 +390,7 @@ async function loadEngine(s) {
   if (s.id !== "schematic") return m;
   return { run: (a) => {
     const file = opts.schematic === "gate" && a.files["netlist.json"] ? "netlist.json" : a.files["rtl.json"] ? "rtl.json" : Object.keys(a.files)[0];
+    schemMeta = cellSrcMap(a.files[file]);
     const n = countCells(a.files[file]);
     if (n > MAX_SCHEMATIC_CELLS) return { ok: true, files: {}, summary: { tooLarge: n } };
     return m.run({ ...a, files: { [file]: a.files[file] }, options: { ...a.options, file } }); } };
@@ -541,6 +593,11 @@ window.require(["vs/editor/editor.main"], () => {
   editor = monaco.editor.create($("editor"), { language: "systemverilog", theme: root.dataset.theme === "dark" ? "vs-dark" : "vs", fontFamily: "JetBrains Mono, monospace",
     fontSize: 13, minimap: { enabled: false }, automaticLayout: true, scrollBeyondLastLine: false, tabSize: 2 });
   editor.onDidChangeModelContent(() => syncFromEditor());
+  editor.onDidChangeCursorPosition((e) => {   // editor -> schematic: signal name under the cursor = its net, else the cells on this line
+    if (quiet || !schem?.root.host?.isConnected) return;
+    const w = models[openFile]?.getWordAtPosition(e.position)?.word;
+    if (!(w && schem.byWord(w))) schem.byLine(openFile, e.position.lineNumber);
+  });
   openF(openFile);
 }, () => cons.log("editor", "WARNING: Monaco could not load (offline?). Files still run."));
 

@@ -20,6 +20,28 @@ export const STAGES = [
 // Engine ids a Properties dropdown may pick that differ from the file name:
 const ENGINE_FILE = { "verilator-wasm": "verilator-lint" };
 export const engineId = (s, o = {}) => { const e = (s.pick && o[s.pick]) || s.engine; return ENGINE_FILE[e] || e; };
+// Yosys `src` attribute -> [{file,l1,l2}]. "a.v:12.3-14.5|b.v:3.1-3.9"; "a.v:12.3-9" (same line) too. Bad pieces are skipped.
+export const parseSrc = (s) => String(s || "").split("|").flatMap((p) => {
+  const m = /^(.*):(\d+)\.\d+-(?:(\d+)\.)?\d+$/.exec(p.trim());
+  return m ? [{ file: m[1], l1: +m[2], l2: +(m[3] || m[2]) }] : [];
+});
+const base = (f) => f.split(/[\\/]/).pop();
+export const srcCovers = (segs, file, line) => segs.some((g) => base(g.file) === base(file) && g.l1 <= line && line <= g.l2);
+// yosys JSON text -> Map(cell name -> {type, segs}) over all modules (the schematic ids are "cell_<name>")
+export function cellSrcMap(json) {
+  const m = new Map(), nets = new Map();
+  try { for (const mod of Object.values(JSON.parse(json).modules || {})) {
+    for (const [n, c] of Object.entries(mod.cells || {})) m.set(n, { type: c.type, segs: parseSrc(c.attributes?.src), width: cellWidth(c.parameters) });
+    for (const [n, w] of Object.entries(mod.netnames || {})) nets.set(n, { bits: w.bits || [], segs: parseSrc(w.attributes?.src) }); } } catch {}
+  m.nets = nets;   // net name -> {bits, segs}: the wire's declaration/driver line
+  return m;
+}
+const num = (v) => (typeof v === "string" ? parseInt(v, 2) : v);
+const cellWidth = (p = {}) => num(p.Y_WIDTH ?? p.WIDTH ?? p.A_WIDTH) || null;
+const WORDS = { $add: "adder", $sub: "subtractor", $mul: "multiplier", $mux: "2:1 multiplexer", $pmux: "priority multiplexer", $eq: "equality comparator", $ne: "inequality comparator", $lt: "less-than comparator", $le: "less-or-equal comparator", $gt: "greater-than comparator", $ge: "greater-or-equal comparator",
+  $dff: "flip-flop", $adff: "flip-flop, async reset", $sdff: "flip-flop, sync reset", $dffe: "flip-flop with enable", $dlatch: "LATCH (usually unintended)", $and: "AND", $or: "OR", $xor: "XOR", $not: "NOT", $shl: "shift left", $shr: "shift right", $sshr: "arithmetic shift right",
+  $logic_and: "logical AND", $logic_or: "logical OR", $logic_not: "logical NOT", $memrd: "memory read", $memwr: "memory write", $mem: "memory", $mem_v2: "memory" };
+export const cellWords = (type, width) => { const t = String(type), w = WORDS[t] || (/^\$reduce_/.test(t) ? "reduce-" + t.slice(8) : /^\$a?dff|^\$sdff/.test(t) ? "flip-flop" : t); return w + (width ? `, ${width} bit` : ""); };
 const idx = (id) => STAGES.findIndex((s) => s.id === id);
 export const byId = (id) => STAGES[idx(id)];
 
