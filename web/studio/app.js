@@ -1,5 +1,5 @@
 // Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
-import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords } from "./stages.js";
+import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords, svgElOk, svgAttrOk, cssSafe } from "./stages.js";
 import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
@@ -271,8 +271,11 @@ function showSchematic(svg) {
   const sh = inner.attachShadow({ mode: "open" });   // shadow root: the SVG's own <style> (svg{fill:none}, text{...}) must not leak into the page
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml"), root = doc.documentElement;
   if (root.localName !== "svg") return emptyCard(el, "Schematic could not be shown", "The SVG did not parse.");
-  for (const n of [...root.querySelectorAll("script,foreignObject")]) n.remove();   // cell names come from user RTL
-  for (const n of [root, ...root.querySelectorAll("*")]) for (const a of [...n.attributes]) if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) n.removeAttribute(a.name);
+  for (const n of [root, ...root.querySelectorAll("*")]) {   // allowlist: cell names come from user RTL, so keep only what netlistsvg emits
+    if (!svgElOk(n.nodeName)) { n.remove(); continue; }
+    for (const a of [...n.attributes]) if (!svgAttrOk(a.name, a.value)) n.removeAttribute(a.name);
+    if (n.nodeName === "style") n.textContent = cssSafe(n.textContent);
+  }
   const st = document.createElement("style");
   st.textContent = "svg{display:block}.xhl>:not(text){stroke:#ff6a00!important;stroke-width:2.5px}.xnet{stroke:#ff6a00!important;stroke-width:3px!important}g[id^=cell_]{cursor:pointer}line,path{pointer-events:stroke}";
   sh.append(document.importNode(root, true), st);
@@ -290,10 +293,11 @@ function showSchematic(svg) {
     const go = h("button", "", "Go to code"); go.onclick = () => gotoSrc(segs);
     peek.append(h("b", "", `${title}  ${fmt(segs)}`), go, h("pre", "", src.slice(g.l1 - 1, Math.min(g.l2, g.l1 + 7)).join("\n")));
   };
-  const hiNet = (name) => { const bits = new Set((nets.get(name)?.bits || []).map(String)); if (!bits.size) return false;   // wires/ports named by their yosys net
+  const real = (v) => v.bits.map(String).filter((b) => !/^[01xz]$/.test(b));   // constants are strings "0"/"1"/"x"/"z", not nets
+  const hiNet = (name) => { const bits = new Set(real(nets.get(name) || { bits: [] })); if (!bits.size) return false;   // wires/ports named by their yosys net
     for (const n of sh.querySelectorAll("[class]")) { const m = /(?:^|\s)net_([\d_]+)(?:\s|$)/.exec(n.getAttribute("class")); if (m && m[1].split("_").some((b) => bits.has(b))) n.classList.add("xnet"); }
     return true; };
-  const netOf = (bit) => [...nets].find(([n, v]) => !n.startsWith("$") && v.bits.map(String).includes(bit)) || [...nets].find(([, v]) => v.bits.map(String).includes(bit));
+  const netOf = (bit) => /^[01xz]$/.test(bit) ? null : [...nets].find(([n, v]) => !n.startsWith("$") && real(v).includes(bit)) || [...nets].find(([, v]) => real(v).includes(bit));
   schem = { root: sh, cells, info };
   schem.byLine = (file, line) => { clear(); for (const g of cells) if (srcCovers(info(g)?.segs || [], file, line)) g.classList.add("xhl"); };
   schem.byWord = (w) => { if (nets.has(w)) { clear(); return hiNet(w); } };
@@ -311,9 +315,11 @@ function showSchematic(svg) {
   let k = 1, x = 0, y = 0; const put = () => { inner.style.transform = `translate(${x}px,${y}px) scale(${k})`; };
   vp.onwheel = (e) => { e.preventDefault(); const r = vp.getBoundingClientRect(), f = e.deltaY < 0 ? 1.15 : 1 / 1.15, px = e.clientX - r.left, py = e.clientY - r.top;
     x = px - (px - x) * f; y = py - (py - y) * f; k *= f; put(); };
-  vp.onpointerdown = (e) => { const t = e.composedPath()[0]; vp.setPointerCapture(e.pointerId); const sx = e.clientX - x, sy = e.clientY - y, x0 = e.clientX, y0 = e.clientY;
+  vp.onpointerdown = (e) => { if (e.button !== 0) return; const t = e.composedPath()[0]; vp.setPointerCapture(e.pointerId); const sx = e.clientX - x, sy = e.clientY - y, x0 = e.clientX, y0 = e.clientY;
     const mv = (m) => { x = m.clientX - sx; y = m.clientY - sy; put(); }; vp.addEventListener("pointermove", mv);
-    vp.addEventListener("pointerup", (u) => { vp.removeEventListener("pointermove", mv); if (Math.hypot(u.clientX - x0, u.clientY - y0) < 4) pick(t); }, { once: true }); };
+    const end = (u) => { vp.removeEventListener("pointermove", mv); vp.removeEventListener("pointerup", end); vp.removeEventListener("pointercancel", end);
+      if (u.type === "pointerup" && Math.hypot(u.clientX - x0, u.clientY - y0) < 4) pick(t); };
+    vp.addEventListener("pointerup", end); vp.addEventListener("pointercancel", end); };
 }
 // Schematic <-> source. schemMeta: cell name -> {type, segs} from the yosys JSON of the drawn view.
 let schem = null, schemMeta = new Map(), srcDec = null, quiet = false;
@@ -324,11 +330,12 @@ function markSrc(segs) {   // highlight the line ranges in Monaco (models only; 
   srcDec?.m.isDisposed() || srcDec?.m.deltaDecorations(srcDec.ids, []); srcDec = null;
   const g = segs.find((q) => projFile(q.file)); if (!g) return;
   const m = modelOf(projFile(g.file));
-  srcDec = { m, ids: m.deltaDecorations([], segs.filter((q) => projFile(q.file) === projFile(g.file)).map((q) => ({ range: new monaco.Range(q.l1, 1, q.l2, 1), options: { isWholeLine: true, className: "xp-line" } }))) };
+  const cl = (l) => Math.max(1, Math.min(l, m.getLineCount()));   // the source may have been edited since the schematic was drawn
+  srcDec = { m, ids: m.deltaDecorations([], segs.filter((q) => projFile(q.file) === projFile(g.file)).map((q) => ({ range: new monaco.Range(cl(q.l1), 1, cl(q.l2), 1), options: { isWholeLine: true, className: "xp-line" } }))) };
 }
 function gotoSrc(segs) {
   const g = segs.find((q) => projFile(q.file)); if (!g || !editor) return;
-  markSrc(segs); showTab("Editor"); openF(projFile(g.file)); quiet = true; editor.revealLineInCenter(g.l1); editor.setPosition({ lineNumber: g.l1, column: 1 }); quiet = false; editor.focus();
+  markSrc(segs); showTab("Editor"); openF(projFile(g.file)); quiet = true; const ln = Math.max(1, Math.min(g.l1, editor.getModel().getLineCount())); editor.revealLineInCenter(ln); editor.setPosition({ lineNumber: ln, column: 1 }); quiet = false; editor.focus();
 }
 
 // Surfer may drop a message sent before its wasm is ready, so send the VCD a few times.
