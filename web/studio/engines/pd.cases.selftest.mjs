@@ -4,11 +4,15 @@ import { createHash } from "node:crypto";
 import { flow, DESIGNS } from "./pd.flow.mjs";
 import * as M from "./magic.worker.js";
 import * as L from "./lvs.worker.js";
+import { retriedNets } from "./route.worker.js";
 import { findShorts, shortsMessage } from "./shorts.js";
 // the short finder on a made-up node: two nets on one Magic node
 const fake = findShorts('merge "u1/A1" "u1/A2"\nmerge "u1/A2" "u2/ZN"', "\nNETS 2 ;\n- n1\n ( u1 A1 ) ( u3 Z ) ;\n- n2\n ( u1 A2 ) ( u2 ZN ) ;\nEND NETS");
 if (fake.length !== 1 || !/Router short: u1\/A1/.test(shortsMessage(fake))) { console.log("FAIL short finder", JSON.stringify(fake)); process.exit(1); }
 console.log("PASS short finder");
+const rn = retriedNets("Error:  Failure to find route start node/route on net a!\nError:  Failure to find route end node/route on net b!\nError:  Failure to find route start node/route on net a!");
+if (rn.join() !== "a,b") { console.log("FAIL retried nets", rn); process.exit(1); }
+console.log("PASS retried nets");
 // These must also match Netgen, with no router short found. pins40 is left out: an unused input's pad can sit under another net's wire
 // (qrouter does not treat single-node nets as obstacles), which merges two ports in Magic.
 const LVS = new Set(["twoclk", "adder", "adder2", "tiny8", "mult8"]);

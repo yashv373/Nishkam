@@ -287,7 +287,7 @@ async function runFlow(p, files, knobs, target = $("result")) {
   const m = s.metrics || {};
   const checks = (p.checks || []).map(([k, op, want, label]) => ({ label, v: m[k], ok: m[k] != null && OPS[op](m[k], want), rule: `${op} ${fmt(want)}` }));
   const allOk = s.state === "done" && checks.every((c) => c.ok);
-  if (p.checks && allOk) { solved.add(p.id); store.set("solved", [...solved]); recordSolve(p.id, typeof code === "string" ? { [`${p.top || p.id}.v`]: code } : {}); renderList(); }
+  if (p.checks && allOk) { solved.add(p.id); store.set("solved", [...solved]); recordSolve(p.id, files); renderList(); }
   setTimeout(() => { if (target.id === "result" && allOk) { target.insertAdjacentHTML("afterbegin", `<p class="actions">${nextStep()} <span class="muted">${solvedN()} of ${PROBLEMS.length} solved</span></p>`); wireNext(); } }, 0);
   const banner = s.state !== "done"
     ? `<div class="banner bad">Flow failed<small>LibreLane stopped early. The end of the log usually says why.</small></div>`

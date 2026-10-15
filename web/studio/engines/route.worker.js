@@ -3,6 +3,7 @@
 import { serve, text } from "./_rpc.js";
 import { V, PDK, pdk, runTool, setRaw } from "./place.worker.js";
 
+export const retriedNets = (out) => [...new Set([...out.matchAll(/Failure to find route (?:start|end) node\/route on net (\S+?)!/g)].map((m) => m[1]))];
 export async function handle({ files, options = {} }, { log, progress, raw = () => {} }) {
   setRaw(raw);
   const defName = Object.keys(files).find((p) => /\.def$/.test(p));
@@ -19,9 +20,9 @@ export async function handle({ files, options = {} }, { log, progress, raw = () 
   const routed = r.files[`${top}_route.def`];
   const failed = /No failed routes/.test(r.out) ? 0 : +((r.out.match(/Final: Failed net routes: (\d+)/) || [])[1] ?? -1);
   const names = failed > 0 ? (r.out.split("List of failed nets follows:")[1] || "").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("-")) : [];
-  // qrouter logs "Failure to find route start node/route on net X" for a segment it later redoes; its final verdict is the count above.
+  // qrouter logs "Failure to find route start|end node/route on net X" for a segment it later redoes; its final verdict is the count above.
   // Measured: with those messages present or absent (pad layer changed) the Netgen result is identical, so they do not fail the stage; list them.
-  const retried = [...new Set([...r.out.matchAll(/Failure to find route start node\/route on net (\S+?)!/g)].map((m) => m[1]))];
+  const retried = retriedNets(r.out);
   return { ok: !!routed && failed === 0, files: routed ? { [`${top}_route.def`]: routed } : {},
     summary: { top, failedNets: failed, failedNames: names, retriedNets: retried, ms: Date.now() - t0, error: routed ? undefined : "qrouter wrote no DEF" } };
 }
