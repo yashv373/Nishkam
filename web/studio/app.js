@@ -1,5 +1,5 @@
 // Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
-import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords, netBits, alwaysRange, svgElOk, svgAttrOk, cssSafe } from "./stages.js";
+import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords, netBits, wireInfo, alwaysRange, svgElOk, svgAttrOk, cssSafe } from "./stages.js";
 import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
@@ -295,10 +295,10 @@ function showSchematic(svg) {
     peek.append(h("b", "", `${title}  ${fmt(segs)}`), go, h("pre", "", src.slice(g.l1 - 1, Math.min(g.l2, g.l1 + 7)).join("\n")));
   };
   const real = (v) => v.bits.map(String).filter((b) => !/^[01xz]$/.test(b));   // constants are strings "0"/"1"/"x"/"z", not nets
-  const hiNet = (name) => { const bits = new Set(real(nets.get(name) || { bits: [] })); if (!bits.size) return false;   // wires/ports named by their yosys net
+  const hiBits = (list) => { const bits = new Set(list); if (!bits.size) return false;
     for (const n of sh.querySelectorAll("[class]")) { if (netBits(n.getAttribute("class")).some((b) => bits.has(b))) n.classList.add("xnet"); }
     return true; };
-  const netOf = (bit) => /^[01xz]$/.test(bit) ? null : [...nets].find(([n, v]) => !n.startsWith("$") && real(v).includes(bit)) || [...nets].find(([, v]) => real(v).includes(bit));
+  const hiNet = (name) => hiBits(real(nets.get(name) || { bits: [] }));   // wires/ports named by their yosys net
   schem = { root: sh, cells, info };
   schem.byLine = (file, line) => { clear(); let n = 0;
     for (const g of cells) if (srcCovers(info(g)?.segs || [], file, line)) { g.classList.add("xhl"); n++; }
@@ -313,7 +313,9 @@ function showSchematic(svg) {
       if (d.length && fmt(d) !== fmt(e.segs || []) && e.segs?.length) peek.append(h("div", "muted", "declared at " + fmt(e.segs))); markSrc(segs); };
     if (g) { const i = info(g); g.classList.add("xhl");
       if (i) { show(i.segs, cellWords(i.type, i.width)); markSrc(i.segs); } else if (nets.has(g.id.slice(5))) net(g.id.slice(5)); else show([], g.getAttribute("s:type") || "cell"); }   // port cells are named like their net
-    else if (nc) { const e = netBits(nc).map(netOf).find(Boolean); e ? net(e[0]) : show([], null); }
+    else if (nc) { const w = wireInfo(nc, nets);
+      if (w.name) net(w.name);
+      else { hiBits(w.bits); show([], "unnamed wire", `${w.unnamed}-bit glue (split/join or constant), part of a larger signal; no source line`); markSrc([]); } }
     else { show([], null); markSrc([]); }
   };
   vp.append(inner); el.append(bar, vp, peek);

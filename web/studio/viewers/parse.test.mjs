@@ -57,5 +57,11 @@ console.log("sta", sta.length, "setup paths,", hold.length, "hold; ok");
   const V = "module m;\nalways @(*) begin\n  if (a) begin\n    y = 1;\n  end\n  case (s)\n  0: y = 2;\n  endcase\nend\nalways @(posedge c) q <= d;\nassign z = 1;\nendmodule";
   assert.deepStrictEqual(alwaysRange(V, 2), [2, 9]); assert.deepStrictEqual(alwaysRange(V, 10), [10, 10]);
   assert.equal(alwaysRange(V, 3), null); assert.equal(alwaysRange("", 1), null);
+  const { wireInfo } = await import("../stages.js");
+  const nn = new Map([["$t", { bits: [5, 6] }], ["w", { bits: [5, 6, 7] }], ["k", { bits: [9] }]]);
+  assert.equal(wireInfo("net_5,6 width_2", nn).name, "w");   // prefers the non-$ name
+  assert.equal(wireInfo("net_x,7 width_2", nn).name, "w"); assert.equal(wireInfo("net_6,40,41", nn).name, "w");
+  assert.deepStrictEqual(wireInfo("net_226,227,228 width_3", nn), { unnamed: 3, bits: ["226", "227", "228"] });   // never empty
+  assert.deepStrictEqual(wireInfo("net_x,x width_2", nn).unnamed, 2);
   console.log("src parser ok");
 }

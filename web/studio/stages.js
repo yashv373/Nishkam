@@ -26,7 +26,13 @@ export const parseSrc = (s) => String(s || "").split("|").flatMap((p) => {
   return m ? [{ file: m[1], l1: +m[2], l2: +(m[3] || m[2]) }] : [];
 });
 // netlistsvg wire class "net_36,37,38 width_3" (comma list; "_" tolerated) -> ["36","37","38"]
-export const netBits = (cls) => ((/(?:^|\s)net_([\d,_]+)/.exec(cls || "") || [])[1] || "").split(/[,_]/).filter(Boolean);
+export const netBits = (cls) => ((/(?:^|\s)net_([\w,]+)/.exec(cls || "") || [])[1] || "").split(/[,_]/).filter(Boolean);
+// What a drawn wire is: a named yosys net (preferring non-$ names), or an unnamed one (split/join glue, constants). Never empty.
+export function wireInfo(cls, nets) {
+  const bits = netBits(cls), real = (v) => v.bits.map(String).filter((b) => !/^[01xz]$/.test(b));
+  for (const pass of [(n) => !n.startsWith("$"), () => true]) for (const b of bits) { const e = /^[01xz]$/.test(b) ? null : [...nets].find(([n, v]) => pass(n) && real(v).includes(b)); if (e) return { name: e[0] }; }
+  return { unnamed: bits.length, bits };
+}
 // 1-based [first,last] line of the always block that starts on `line` (begin/end and case/endcase nesting; a bare statement ends at its ';'), else null
 export function alwaysRange(src, line) {
   const L = String(src).split("\n");
