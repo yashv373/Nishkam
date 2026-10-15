@@ -3,7 +3,7 @@ import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoos
 import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
-import { createProject } from "./files.js";
+import { createProject, EXAMPLES } from "./files.js";
 import * as R from "./runner-client.js";
 import { PROBLEMS } from "../problems.js";
 import { createTour } from "./tour.js";
@@ -37,9 +37,8 @@ const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_s
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
 // studio.html#demo=squeeze-tiny8 : the Practice page's "try it in the browser" link
 if (location.hash === "#demo=squeeze-tiny8") {
-  const t8 = PROBLEMS.find((x) => x.id === "squeeze-tiny8");
-  if (!project.get("tiny8.v")) project.add("tiny8.v", t8.files["tiny8.v"]);
-  Object.assign(opts, { top: "tiny8", tb: "", clockPeriod: 24, dieW: 250, dieH: 250, density: 50, pdEngine: "browser" });   // the problem's starting knobs, not the answer
+  const ex = EXAMPLES.find((x) => x.id === "squeeze-tiny8");
+  project.replace(ex.files, ex.name); Object.assign(opts, { top: ex.top, tb: ex.tb, ...ex.opts });   // the problem's starting knobs, not the answer
   store.set("studio:opts", opts);
   history.replaceState(null, "", location.pathname + location.search);   // apply once: a reload must not reset the user's knobs
 }
@@ -525,8 +524,30 @@ addEventListener("keydown", (e) => {
 // Open the file that defines the top module first (falls back to the first file).
 let editor, openFile = project.list().find((n) => new RegExp(String.raw`\bmodule\s+${opts.top}\b`).test(project.get(n) || "")) || project.list()[0];
 const models = {};
+let tabEx = false, undo = null;
+function swapProject(name, files, o, msg) {
+  project.replace(files, name); Object.assign(opts, o); store.set("studio:opts", opts);
+  for (const k in models) { models[k].dispose(); delete models[k]; }
+  $("projName").value = project.name; buildProps(); markStale(); cons.log("files", msg);
+  tabEx = false; openF(project.list()[0]);
+}
+function loadExample(ex) {
+  undo = { name: project.name, files: project.all(), o: { top: opts.top, tb: opts.tb } };
+  swapProject(ex.name, ex.files, { top: ex.top, tb: ex.tb, ...ex.opts }, `Loaded example ${ex.name} (your previous files were replaced).`);
+}
+function undoLoad() { const u = undo; undo = null; if (u) swapProject(u.name, u.files, u.o, "Restored your previous files."); }
+function drawExamples() {
+  const el = $("examples"); el.replaceChildren();
+  for (const ex of EXAMPLES) { const d = h("div", "exrow"); d.append(h("b", "", ex.name), h("span", "", " " + ex.desc));
+    d.append(Object.assign(document.createElement("button"), { textContent: "Load", onclick: () => loadExample(ex) })); el.append(d); }
+}
 function drawFileBar() {
   const bar = $("filebar"); bar.replaceChildren();
+  let ex = $("examples"); if (!ex) { ex = Object.assign(document.createElement("div"), { id: "examples" }); $("editor").before(ex); }
+  ex.hidden = !tabEx; $("editor").hidden = tabEx; if (tabEx) drawExamples(); else editor?.layout();
+  for (const t of ["Project", "Examples"]) { const b = document.createElement("button"); b.textContent = t; b.className = (t === "Examples") === tabEx ? "on" : ""; b.onclick = () => { tabEx = t === "Examples"; drawFileBar(); }; bar.append(b); }
+  if (undo) bar.append(Object.assign(document.createElement("button"), { textContent: "Undo load", onclick: undoLoad }));
+  if (tabEx) return;
   for (const n of project.list()) { const b = document.createElement("button"); b.textContent = n; b.className = n === openFile ? "on" : ""; b.onclick = () => openF(n); bar.append(b); }
   const mk = (t, f, title) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = f; bar.append(b); };
   mk("+ New", () => { const n = prompt("New file name (.v .sv .vh)"); if (n) try { project.add(n, `module ${n.replace(/\..*/, "")};\nendmodule\n`); openF(n); buildProps(); } catch (e) { alert(e.message); } }, "New file");

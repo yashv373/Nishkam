@@ -38,14 +38,19 @@ module tb_shreg4;
   end
 endmodule
 `;
+// Built-in designs for the Examples tab. top/tb/opts are what Load sets in Properties.
+const t8 = PROBLEMS.find((x) => x.id === "squeeze-tiny8");
+export const EXAMPLES = [
+  { id: "shreg4", name: "shreg4", desc: "A 4-bit shift register with an active-low reset. Smallest design, good for a first run.", top: "shreg4", tb: "tb_shreg4.v", files: { "shreg4.v": SHREG, "tb_shreg4.v": TB_SHREG } },
+  { id: "counter", name: "counter", desc: "A 4-bit counter with enable and reset.", top: "counter", tb: "tb_counter.v", files: { "counter.v": COUNTER, "tb_counter.v": TB } },
+  { id: "squeeze-tiny8", name: "tiny8", desc: "A tiny 8-bit processor, the starting point of the Squeeze tiny8 problem. No testbench.", top: "tiny8", tb: "", files: { "tiny8.v": t8?.files["tiny8.v"] || "// tiny8 missing\n" },
+    opts: { clockPeriod: 24, dieW: 250, dieH: 250, density: 50, pdEngine: "browser" } },
+];
 const ok = (p) => /\.(v|sv|vh|svh)$/i.test(p);
 export function createProject() {
   let p;
   try { p = JSON.parse(localStorage.getItem(KEY)); } catch {}
-  if (!p || !p.files) {
-    const t8 = PROBLEMS.find((x) => x.id === "squeeze-tiny8");
-    p = { name: "shreg4", files: { "shreg4.v": SHREG, "tb_shreg4.v": TB_SHREG, "tiny8.v": t8?.files["tiny8.v"] || "// tiny8 missing\n", "counter.v": COUNTER, "tb_counter.v": TB } };
-  }
+  if (!p || !p.files) p = { name: "shreg4", files: { ...EXAMPLES[0].files } };   // first visit: shreg4 loaded so Run All works at once
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch {} };
   return {
     get name() { return p.name; }, set name(v) { p.name = v; save(); },
@@ -54,6 +59,7 @@ export function createProject() {
     set(n, text) { p.files[n] = text; save(); },
     add(n, text = "") { if (!ok(n)) throw new Error("use .v .sv .vh or .svh"); if (n in p.files) throw new Error("already exists"); p.files[n] = text; save(); },
     rename(a, b) { if (!ok(b)) throw new Error("use .v .sv .vh or .svh"); if (b in p.files) throw new Error("already exists"); p.files[b] = p.files[a]; delete p.files[a]; save(); },
+    replace(files, name) { p = { name, files: { ...files } }; save(); },
     remove(n) { delete p.files[n]; save(); },
     all: () => ({ ...p.files }),
     isTb: (n) => /(^|\/)(tb_|test)|_tb\.|_tb$/i.test(n),

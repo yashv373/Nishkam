@@ -221,3 +221,6 @@ body{overflow:auto;background:#000}
 @media (prefers-reduced-motion:reduce){#tourHole{transition:none}}
 
 .bnote{flex:none;padding:4px 12px;border-bottom:1px solid var(--line);background:var(--bg-2);color:var(--text-3);font-size:var(--fs-sm)}
+#examples{padding:10px 12px;overflow:auto;flex:1}
+#examples .exrow{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+#examples .exrow span{flex:1;color:var(--text-2)}
