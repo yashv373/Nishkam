@@ -98,6 +98,7 @@ dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--p
 dialog::backdrop { background: rgba(0,0,0,.35); }
 dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; white-space: pre-wrap; }
 @media (max-width: 900px) {
+  .pill small, .keynote { display: none; }   /* both notes made the header ~500px wide on phones; Studio is desktop-only anyway */
   main { display: block; overflow: auto; }
   nav, #statement { border-right: 0; border-bottom: 1px solid var(--line); }
   #work { min-height: 80vh; }
@@ -110,7 +111,7 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
   <a class="brand" href="./" style="color:inherit;text-decoration:none" aria-label="Nishkam home"><span class="logotype"></span></a>
   <span class="tagline">Invincible is just a word.</span>
   <span class="spacer"></span>
-  <a class="pill" href="studio.html" style="text-decoration:none">Open Studio</a>
+  <a class="pill" href="studio.html" style="text-decoration:none" title="Studio needs an access key.">Open Studio</a><small class="keynote" style="opacity:.55;font-size:11px;white-space:nowrap">Studio needs an access key.</small>
   <button id="runnerBtn" class="pill"><span class="dot"></span><span id="runnerText">Local runner: off</span><small> (work in progress)</small></button>
 </header>
 <main>
@@ -149,7 +150,7 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
 (function(){function bad(){if(window.__nkBoot||window.__nkGuard)return;window.__nkGuard=1;var k='nk:reloaded',t=0;try{t=sessionStorage.getItem(k)}catch(e){}
 if(!t){try{sessionStorage.setItem(k,'1')}catch(e){}Promise.all(performance.getEntriesByType('resource').filter(function(e){return/\.m?js(\?|$)/.test(e.name)&&e.name.indexOf(location.origin)==0}).map(function(e){return fetch(e.name,{cache:'reload'}).catch(function(){})})).then(function(){location.reload()});return}
 var d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:grid;place-items:center;background:#000;color:#fff;font:16px sans-serif;text-align:center;padding:24px;z-index:99';d.textContent='Nishkam was just updated. Reload the page (Ctrl+Shift+R).';document.body.appendChild(d)}
-addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(e.message))bad()});addEventListener('load',function(){setTimeout(function(){if(window.__nkBoot)try{sessionStorage.removeItem('nk:reloaded')}catch(e){}},9000)})})();</script>
+addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(e.message)&&(/^module import failed/.test(e.message)||(e.filename||'').indexOf(location.origin)==0))bad()});addEventListener('load',function(){setTimeout(function(){if(window.__nkBoot)try{sessionStorage.removeItem('nk:reloaded')}catch(e){}},9000)})})();</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -26,7 +26,14 @@ export const parseSrc = (s) => String(s || "").split("|").flatMap((p) => {
   return m ? [{ file: m[1], l1: +m[2], l2: +(m[3] || m[2]) }] : [];
 });
 // netlistsvg wire class "net_36,37,38 width_3" (comma list; "_" tolerated) -> ["36","37","38"]
-export const netBits = (cls) => ((/(?:^|\s)net_([\d,_]+)/.exec(cls || "") || [])[1] || "").split(/[,_]/).filter(Boolean);
+export const netBits = (cls) => ((/(?:^|\s)net_([\w,]+)/.exec(cls || "") || [])[1] || "").split(/[,_]/).filter(Boolean);
+// What a drawn wire is: a named yosys net (preferring non-$ names), or an unnamed one (split/join glue, constants). Never empty.
+export function wireInfo(cls, nets) {
+  const bits = netBits(cls), real = (v) => v.bits.map(String).filter((b) => !/^[01xz]$/.test(b));
+  for (const pass of [(n) => !n.startsWith("$"), () => true]) for (const b of bits) { const e = /^[01xz]$/.test(b) ? null : [...nets].find(([n, v]) => pass(n) && real(v).includes(b)); if (e) return { name: e[0] }; }
+  const live = bits.filter((b) => !/^[01xz]$/.test(b));   // constants are tied everywhere: never highlight by them
+  return { unnamed: bits.length, bits: live, constant: !live.length };
+}
 // 1-based [first,last] line of the always block that starts on `line` (begin/end and case/endcase nesting; a bare statement ends at its ';'), else null
 export function alwaysRange(src, line) {
   const L = String(src).split("\n");
@@ -163,7 +170,7 @@ export async function runStages(ids, deps) {
       const r = await eng.run({ files, options: { ...deps.options(), ...st.opts, stage: id },
         onLog: (l) => { seen += l; deps.onLog(id, l); }, onProgress: (f) => deps.onProgress?.(id, f), signal: deps.signal });
       Object.assign(outputs, r.files || {});
-      for (const m of r.summary?.messages || []) if (!seen.includes(m.text))   // tool messages the engine did not print must still reach the Console
+      for (const m of r?.summary?.messages || []) if (typeof m?.text === "string" && !seen.includes(m.text))   // tool messages the engine did not print must still reach the Console
         deps.onLog(id, (m.severity === "error" ? "ERROR: " : "WARNING: ") + (m.file ? m.file + (m.line ? ":" + m.line : "") + ": " : "") + m.text);
       deps.onResult?.(id, r);
       if (!r.ok) ok = false;
