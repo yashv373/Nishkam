@@ -3,7 +3,7 @@ import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoos
 import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
-import { createProject } from "./files.js";
+import { createProject, EXAMPLES } from "./files.js";
 import * as R from "./runner-client.js";
 import { PROBLEMS } from "../problems.js";
 import { createTour } from "./tour.js";
@@ -37,9 +37,8 @@ const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_s
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
 // studio.html#demo=squeeze-tiny8 : the Practice page's "try it in the browser" link
 if (location.hash === "#demo=squeeze-tiny8") {
-  const t8 = PROBLEMS.find((x) => x.id === "squeeze-tiny8");
-  if (!project.get("tiny8.v")) project.add("tiny8.v", t8.files["tiny8.v"]);
-  Object.assign(opts, { top: "tiny8", tb: "", clockPeriod: 24, dieW: 250, dieH: 250, density: 50, pdEngine: "browser" });   // the problem's starting knobs, not the answer
+  const ex = EXAMPLES.find((x) => x.id === "squeeze-tiny8");
+  project.replace(ex.files, ex.name); Object.assign(opts, { top: ex.top, tb: ex.tb, ...ex.opts });   // the problem's starting knobs, not the answer
   store.set("studio:opts", opts);
   history.replaceState(null, "", location.pathname + location.search);   // apply once: a reload must not reset the user's knobs
 }
@@ -47,14 +46,14 @@ const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
   { k: "simEngine", label: "Simulation engine", t: "select", o: [["icarus", "Icarus Verilog"], ["verilator", "Verilator (coming soon)", true]], st: ["sim"] },
   { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "floorplan", "place", "cts", "route", "sta", "signoff"] },
-  { k: "tb", label: "Testbench file", t: "file", st: ["sim"] },
+  { k: "tb", label: "Testbench", t: "file", st: ["sim"] },
   { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
   { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "floorplan", "place", "cts", "sta"] },
   { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "floorplan", "cts", "sta"], rn: true },
   { k: "inDelay", label: "Input delay (ns)", t: "number", ph: "empty = 20% of period", st: ["sta", "signoff"] },
   { k: "outDelay", label: "Output delay (ns)", t: "number", ph: "empty = 20% of period", st: ["sta", "signoff"] },
   { k: "loadPf", label: "Output load (pF)", t: "number", st: ["sta", "signoff"] },
-  { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser: experimental (qflow tools on gf180)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser: experimental (qflow tools on gf180)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"], tip: "Automatic: uses the local runner if connected, otherwise the in-browser tools" },
   { k: "pdTimeout", label: "Browser step time limit (s)", t: "number", st: ["place", "route", "signoff"] },
   { k: "dieW", label: "Die width (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "dieH", label: "Die height (um)", t: "number", st: ["floorplan", "place"], rn: true },
@@ -64,15 +63,15 @@ const FIELDS = [
 function buildProps() {
   const b = $("propsBody"); b.replaceChildren();
   for (const f of FIELDS) {
-    const d = document.createElement("div"); d.className = "fld" + (f.t === "check" ? " chk" : ""); d.dataset.k = f.k;
+    const d = document.createElement("div"); d.className = "fld" + (f.t === "check" ? " chk" : ""); d.dataset.k = f.k; if (f.tip) d.title = f.tip;
     const l = document.createElement("label"); l.textContent = f.label; l.htmlFor = "o_" + f.k;
     let inp;
     if (f.t === "select" || f.t === "file") {
       inp = document.createElement("select");
-      const items = f.t === "file" ? project.list().map((n) => [n, n]) : f.o.map((x) => (Array.isArray(x) ? x : [x, x]));
+      const items = f.t === "file" ? [["", "(none)"], ...project.list().map((n) => [n, n])] : f.o.map((x) => (Array.isArray(x) ? x : [x, x]));
       for (const [v, t, dis] of items) { const o = new Option(t, v); o.disabled = !!dis; inp.add(o); }
       inp.value = opts[f.k];
-      if (f.t === "file" && !project.list().includes(opts[f.k])) inp.value = project.list().find(project.isTb) || "";
+      if (f.t === "file" && opts[f.k] && !project.list().includes(opts[f.k])) opts[f.k] = inp.value = project.list().find(project.isTb) || "";
     } else {
       inp = document.createElement("input"); if (f.ph) inp.placeholder = f.ph; inp.type = f.t === "check" ? "checkbox" : f.t === "number" ? "number" : "text";
       if (f.t === "check") inp.checked = opts[f.k]; else inp.value = opts[f.k];
@@ -142,6 +141,7 @@ function select(id) {
 function setState(id, st, info) {
   const prev = state[id]?.st;
   state[id] = { st, info: typeof info === "string" ? info : undefined, t: 0, t0: st === "running" ? Date.now() : 0 };
+  if (id === "sim" && st === "unavailable") { wave?.destroy(); wave = null; emptyCard(view("Waveform"), "No waveform", "Simulation was skipped, so there is no waveform from this run."); }
   if (st === "running") for (const d of downstream(id)) if (["passed", "warn"].includes(state[d]?.st)) state[d].st = "stale";
   if (st === "passed" || st === "warn") cons.settle(id);
   if (st === "running" && HINT[id]) cons.log(id, `${byId(id).label}: ${HINT[id]}`);
@@ -339,8 +339,10 @@ function gotoSrc(segs) {
 }
 
 // Surfer may drop a message sent before its wasm is ready, so send the VCD a few times.
-async function showWave(vcd) {
+async function showWave(vcd, force) {
   const el = view("Waveform"); wave?.destroy(); el.replaceChildren();
+  const mb = (vcd.length || 0) / 1e6;
+  if (!force && mb > 20) { await showTab("Waveform"); return emptyCard(el, "Large waveform", `The waveform file is ${mb.toFixed(0)} MB. Loading it can freeze this tab for a minute. It is saved in Files / Artifacts.`, false, ["Load anyway", () => showWave(vcd, true)]); }
   try {
     await showTab("Waveform"); el.replaceChildren();   // Surfer must be visible when it starts, or its canvas is 0x0
     const w = wave = (await import("./engines/surfer.js")).mount(el);
@@ -420,7 +422,10 @@ const staOpts = () => {
   return { top: opts.top, clockPort: opts.clockPort, periodNs: p, inputDelayNs: d(opts.inDelay), outputDelayNs: d(opts.outDelay), loadPf: opts.loadPf === "" || opts.loadPf == null ? 0 : +opts.loadPf };
 };
 let staN = 0;
+// Does the gate-level netlist have an input port of this name?
+const hasPort = (v, p) => !!p && new RegExp(String.raw`\binput\b[^;]*\b` + String(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + String.raw`\b`).test(typeof v === "string" ? v : "");
 async function staRun(key, files, io, propagated = false) {
+  if (!hasPort(files[opts.top + ".v"], opts.clockPort)) io.onLog(`WARNING: Clock port '${opts.clockPort}' not found; timing is unconstrained.`);
   const o = { ...staOpts(), propagated }, x = { key, label: STA_LABEL[key], sdc: sdc(o), n: ++staN };
   try {
     const r = await (await import("./engines/opensta.js")).run({ files, options: o, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
@@ -444,6 +449,7 @@ async function localStage(id, io) {
   let r;
   if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout, headroom: [0.1, 600] } });
   else if (id === "cts") {   // placed DEF + the same SDC as Timing -> DEF with the clock tree and a netlist that has the clock buffers
+    if (!hasPort(need(outputs["netlist.v"], "Synthesis"), opts.clockPort)) { delete PD.cts; io.onLog(`Clock Tree skipped: no clock port '${opts.clockPort}' in this design.`); return { ok: true, state: "unavailable", info: "skipped: no clock in this design" }; }
     const pl = need(PD.place, "Placement");
     r = await m.run({ ...a, files: { [top + ".def"]: pl[top + ".def"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), "constraints.sdc": sdc(staOpts()) }, options: { top, timeoutS: opts.pdTimeout } });
   } else if (id === "route") r = await m.run({ ...a, files: { ...need(PD.place, "Placement"), ...PD.cts }, options: { top, timeoutS: opts.pdTimeout } });
@@ -532,10 +538,14 @@ async function start(ids) {
   running = true; abort = new AbortController(); planned = ids; frac = 0; applyFx();
   $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
   syncFromEditor(); cons.startTimer();
-  const res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
+  const beat = setInterval(() => { for (const [id, v] of Object.entries(state)) if (v.st === "running") cons.log(id, `${id} still running, ${Math.round((Date.now() - v.t0) / 1000)} s`); }, 15000);
+  let res = { ok: false };
+  try { res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
     options: () => ({ ...opts, knobs: knobs(), ...(pdLocal() ? { dontUse: QROUTER_DONT_USE } : {}) }), setState, onLog: (id, l) => cons.log(id, l),
     onProgress: (id, f) => { frac = f; setProgress(); }, onResult,
-    engine: loadEngine, runnerJob, local: pdLocal, localStage });
+    engine: loadEngine, runnerJob, local: pdLocal, localStage }); }
+  catch (e) { cons.log("run", "ERROR: " + e.message); } finally { clearInterval(beat); }
+  if (staleLater) { staleLater = false; markStale(); }
   running = false; abort = null; frac = 0; applyFx(); cons.stopTimer();
   $("stop").disabled = true; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = false);
   if (res.ok) { setState("files", "passed", "ready"); setState("reports", "passed", "ready"); }   // the two collecting pages have nothing to run
@@ -545,12 +555,13 @@ async function start(ids) {
 $("runAll").onclick = () => start(plan("all"));
 $("runTo").onclick = () => start(plan("to", selected));
 $("runOne").onclick = () => start(plan("one", selected));
-$("stop").onclick = () => abort?.abort();
+const stopRun = () => { if (abort && !abort.signal.aborted) { cons.log(Object.keys(state).find((k) => state[k].st === "running") || selected, "Stopped by user"); abort.abort(); } };
+$("stop").onclick = stopRun;
 $("projName").value = project.name; $("projName").onchange = (e) => { project.name = e.target.value; };
 
 // ---------- palette ----------
 const CMDS = [["Run All", () => start(plan("all"))], ["Run to selected stage", () => start(plan("to", selected))], ["Run selected stage", () => start(plan("one", selected))],
-  ["Stop", () => abort?.abort()], ["Connect local runner", () => $("runnerDlg").showModal()], ["Load demo run", loadDemo], ["Toggle theme", () => $("theme").click()],
+  ["Stop", stopRun], ["Connect local runner", () => $("runnerDlg").showModal()], ["Load demo run", loadDemo], ["Toggle theme", () => $("theme").click()],
   ["Toggle low effects", () => $("fx").click()], ["Clear console", () => cons.clear()], ...TABS.map((t) => ["Go to " + t, () => showTab(t)])];
 let palSel = 0;
 function palDraw() {
@@ -578,8 +589,30 @@ addEventListener("keydown", (e) => {
 // Open the file that defines the top module first (falls back to the first file).
 let editor, openFile = project.list().find((n) => new RegExp(String.raw`\bmodule\s+${opts.top}\b`).test(project.get(n) || "")) || project.list()[0];
 const models = {};
+let staleLater = false, tabEx = false, undo = null;
+function swapProject(name, files, o, msg) {
+  project.replace(files, name); Object.assign(opts, o); store.set("studio:opts", opts);
+  for (const k in models) { models[k].dispose(); delete models[k]; }
+  $("projName").value = project.name; buildProps(); markStale(); cons.log("files", msg);
+  tabEx = false; openF(project.list()[0]);
+}
+function loadExample(ex) {
+  undo = { name: project.name, files: project.all(), o: { top: opts.top, tb: opts.tb } };
+  swapProject(ex.name, ex.files, { top: ex.top, tb: ex.tb, ...ex.opts }, `Loaded example ${ex.name} (your previous files were replaced).`);
+}
+function undoLoad() { const u = undo; undo = null; if (u) swapProject(u.name, u.files, u.o, "Restored your previous files."); }
+function drawExamples() {
+  const el = $("examples"); el.replaceChildren();
+  for (const ex of EXAMPLES) { const d = h("div", "exrow"); d.append(h("b", "", ex.name), h("span", "", " " + ex.desc));
+    d.append(Object.assign(document.createElement("button"), { textContent: "Load", onclick: () => loadExample(ex) })); el.append(d); }
+}
 function drawFileBar() {
   const bar = $("filebar"); bar.replaceChildren();
+  let ex = $("examples"); if (!ex) { ex = Object.assign(document.createElement("div"), { id: "examples" }); $("editor").before(ex); }
+  ex.hidden = !tabEx; $("editor").hidden = tabEx; if (tabEx) drawExamples(); else editor?.layout();
+  for (const t of ["Project", "Examples"]) { const b = document.createElement("button"); b.textContent = t; b.className = (t === "Examples") === tabEx ? "on" : ""; b.onclick = () => { tabEx = t === "Examples"; drawFileBar(); }; bar.append(b); }
+  if (undo) bar.append(Object.assign(document.createElement("button"), { textContent: "Undo load", onclick: undoLoad }));
+  if (tabEx) return;
   for (const n of project.list()) { const b = document.createElement("button"); b.textContent = n; b.className = n === openFile ? "on" : ""; b.onclick = () => openF(n); bar.append(b); }
   const mk = (t, f, title) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = f; bar.append(b); };
   mk("+ New", () => { const n = prompt("New file name (.v .sv .vh)"); if (n) try { project.add(n, `module ${n.replace(/\..*/, "")};\nendmodule\n`); openF(n); buildProps(); } catch (e) { alert(e.message); } }, "New file");
@@ -601,7 +634,7 @@ window.require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/mon
 window.require(["vs/editor/editor.main"], () => {
   editor = monaco.editor.create($("editor"), { language: "systemverilog", theme: root.dataset.theme === "dark" ? "vs-dark" : "vs", fontFamily: "JetBrains Mono, monospace",
     fontSize: 13, minimap: { enabled: false }, automaticLayout: true, scrollBeyondLastLine: false, tabSize: 2 });
-  editor.onDidChangeModelContent(() => syncFromEditor());
+  let ed; editor.onDidChangeModelContent(() => { syncFromEditor(); clearTimeout(ed); ed = setTimeout(() => { if (running) staleLater = true; else markStale(); }, 400); });   // an edit makes every finished stage stale
   editor.onDidChangeCursorPosition((e) => {   // editor -> schematic: signal name under the cursor = its net, else the cells on this line
     if (quiet || !schem?.root.host?.isConnected) return;
     const w = models[openFile]?.getWordAtPosition(e.position)?.word;

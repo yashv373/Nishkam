@@ -136,12 +136,21 @@ export async function runStages(ids, deps) {
     let eng;
     try { eng = await deps.engine(byId(id)); }
     catch (e) { mark([id], "unavailable", "engine not available yet"); deps.onLog(id, "WARNING: engine not available yet (" + e.message + ")"); continue; }
-    const st = byId(id), files = st.in ? Object.fromEntries(Object.keys(outputs).filter((f) => st.in.some((p) => (p[0] === "*" ? f.endsWith(p.slice(1)) : f === p))).map((f) => [f, outputs[f]])) : deps.files(id);
+    const st = byId(id);
+    if (st.src === "sim" && !deps.options().tb) {   // no testbench: skip when part of a flow, say so plainly when run alone
+      if (ids.length === 1) { ok = false; deps.onLog(id, "ERROR: No testbench selected. Pick one in Properties → Testbench."); mark([id], "failed", "no testbench"); }
+      else { deps.onLog(id, "Simulation skipped: no testbench selected."); mark([id], "unavailable", "skipped: no testbench"); }
+      continue;
+    }
+    const files = st.in ? Object.fromEntries(Object.keys(outputs).filter((f) => st.in.some((p) => (p[0] === "*" ? f.endsWith(p.slice(1)) : f === p))).map((f) => [f, outputs[f]])) : deps.files(id);
     if (st.in && !Object.keys(files).length) { ok = false; deps.onLog(id, "ERROR: nothing to draw yet. Run Synthesis first."); mark([id], "failed", "run Synthesis first"); continue; }
     try {
+      let seen = "";
       const r = await eng.run({ files, options: { ...deps.options(), ...st.opts, stage: id },
-        onLog: (l) => deps.onLog(id, l), onProgress: (f) => deps.onProgress?.(id, f), signal: deps.signal });
+        onLog: (l) => { seen += l; deps.onLog(id, l); }, onProgress: (f) => deps.onProgress?.(id, f), signal: deps.signal });
       Object.assign(outputs, r.files || {});
+      for (const m of r.summary?.messages || []) if (!seen.includes(m.text))   // tool messages the engine did not print must still reach the Console
+        deps.onLog(id, (m.severity === "error" ? "ERROR: " : "WARNING: ") + (m.file ? m.file + (m.line ? ":" + m.line : "") + ": " : "") + m.text);
       deps.onResult?.(id, r);
       if (!r.ok) ok = false;
       const sm = r.summary || {}, w = sm.warnings;
