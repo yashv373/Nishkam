@@ -34,7 +34,7 @@ export const DESIGNS = {
 };
 export async function flow(top, src, log = () => {}) {
   const io = { log, progress: () => {} }, T = {}; let t0 = Date.now();
-  const sy = await Y.handle({ mode: "synth", files: { [top + ".v"]: src }, options: { top, dontUse: DONT.map((c) => "gf180mcu_fd_sc_mcu7t5v0__" + c) } }, io);
+  const sy = await Y.handle({ mode: "synth", files: { [top + ".v"]: src }, options: { top, dontUse: [...DONT, ...(process.env.EXTRA_DONT ? process.env.EXTRA_DONT.split(",") : [])].map((c) => "gf180mcu_fd_sc_mcu7t5v0__" + c) } }, io);
   if (!sy.ok) throw new Error("synth failed " + JSON.stringify(sy.summary).slice(0, 300));
   const nl = sy.files["netlist.v"]; T.synth = Date.now() - t0; t0 = Date.now();
   const pl = await P.handle({ files: { [top + ".v"]: nl }, options: { top, headroom: [0.1, 600] } }, io);
