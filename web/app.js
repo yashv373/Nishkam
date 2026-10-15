@@ -1,4 +1,5 @@
 import { PROBLEMS, HARDEN_KNOBS } from "./problems.js";
+window.__nkBoot = 1;
 import { DEPTH } from "./grader.js";
 
 const $ = (id) => document.getElementById(id);
