@@ -269,7 +269,7 @@ function showSchematic(svg) {
   const bar = h("div", "sbar");
   for (const [k, t] of [["rtl", "RTL (readable)"], ["gate", "Gate level"]]) { const b = h("button", opts.schematic === k ? "on" : "", t);
     b.onclick = () => { if (running) return; opts.schematic = k; store.set("studio:opts", opts); start(["schematic"]); }; bar.append(b); }
-  const pb = h("button", "", "Worst path"); pb.title = "Highlight the worst setup path from the Timing (STA) stage"; pb.disabled = !staPath(); bar.append(pb);
+  const pb = h("button", "", "Worst path"); pb.title = "Highlight the worst setup path from the Timing (STA) stage"; pb.disabled = !hasSta(); bar.append(pb);
   const vp = h("div", "svp"), inner = h("div", "sin"), peek = h("div", "speek");
   const sh = inner.attachShadow({ mode: "open" });   // shadow root: the SVG's own <style> (svg{fill:none}, text{...}) must not leak into the page
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml"), root = doc.documentElement;
@@ -305,7 +305,7 @@ function showSchematic(svg) {
   const clearPath = () => { svgEl.classList.remove("dimp"); for (const n of sh.querySelectorAll(".xpath")) n.classList.remove("xpath"); pb.classList.remove("on"); };
   pb.onclick = () => {   // worst setup path: exact in the gate view, mapped through source lines in the RTL view
     if (pb.classList.contains("on")) { clearPath(); show([], null); return; }
-    const sp = staPath(); if (!sp) return; clearPath(); clear();
+    clearPath(); clear(); const sp = staPath(); if (!sp) { peek.replaceChildren(h("span", "muted", "No setup path found in the timing report (only async-reset recovery checks, or no netlist).")); return; }
     const m = pathModel(sp.path, sp.json), gate = opts.schematic === "gate", list = m.insts.map((i) => `${i} (${(sp.path.rows.find((r) => r.pin.replace(/\\/g, "").startsWith(i + "/"))?.cell) || "?"})`);
     let note = "", on = [];
     if (gate) { on = cells.filter((g) => m.insts.includes(g.id.slice(5))); hiPathBits(m.bits); }
@@ -346,9 +346,12 @@ function showSchematic(svg) {
     vp.addEventListener("pointerup", end); vp.addEventListener("pointercancel", end); };
 }
 // Worst setup path of the pre-layout STA run + the gate netlist, or null until both exist.
+const hasSta = () => !!(outputs["browser/sta/stapostpnr/pre-layout/max.rpt"] && outputs["netlist.json"]);
 function staPath() {
   const r = outputs["browser/sta/stapostpnr/pre-layout/max.rpt"], nj = outputs["netlist.json"]; if (!r || !nj) return null;
-  const path = parseSta(typeof r === "string" ? r : new TextDecoder().decode(r))[0]; return path ? { path, json: typeof nj === "string" ? nj : new TextDecoder().decode(nj) } : null;
+  const ps = parseSta(typeof r === "string" ? r : new TextDecoder().decode(r));
+  const path = ps.find((p) => p.kind === "data");   // reports are sorted worst-first; skip async-reset recovery/removal checks, they are not setup paths
+  return path ? { path, json: typeof nj === "string" ? nj : new TextDecoder().decode(nj) } : null;
 }
 // Schematic <-> source. schemMeta: cell name -> {type, segs} from the yosys JSON of the drawn view.
 let schem = null, schemMeta = new Map(), srcDec = null, quiet = false;
@@ -398,7 +401,7 @@ function staShow(r, id) {
     ctx.staInfo = Object.fromEntries(e.map(([k, x]) => [k, { label: x.label, sdc: x.sdc, error: x.error, n: x.n, power: x.summary && x.summary.total_uW }]));
   }
   const paths = Object.keys(r.files || {}).filter((p) => p.startsWith("browser/"));
-  if (schem?.pathBtn) schem.pathBtn.disabled = !staPath();
+  if (schem?.pathBtn) schem.pathBtn.disabled = !hasSta();
   if (id === "sta") { regBrowser(paths); showTab("Timing"); }
   else { for (const v of Object.values(viewers)) v.inst.update?.(ctx); bnote(curTab); }
 }
