@@ -98,6 +98,7 @@ dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--p
 dialog::backdrop { background: rgba(0,0,0,.35); }
 dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; white-space: pre-wrap; }
 @media (max-width: 900px) {
+  .pill small, .keynote { display: none; }   /* both notes made the header ~500px wide on phones; Studio is desktop-only anyway */
   main { display: block; overflow: auto; }
   nav, #statement { border-right: 0; border-bottom: 1px solid var(--line); }
   #work { min-height: 80vh; }
@@ -110,7 +111,7 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
   <a class="brand" href="./" style="color:inherit;text-decoration:none" aria-label="Nishkam home"><span class="logotype"></span></a>
   <span class="tagline">Invincible is just a word.</span>
   <span class="spacer"></span>
-  <a class="pill" href="studio.html" style="text-decoration:none" title="Studio needs an access key.">Open Studio</a><small style="opacity:.55;font-size:11px;white-space:nowrap">Studio needs an access key.</small>
+  <a class="pill" href="studio.html" style="text-decoration:none" title="Studio needs an access key.">Open Studio</a><small class="keynote" style="opacity:.55;font-size:11px;white-space:nowrap">Studio needs an access key.</small>
   <button id="runnerBtn" class="pill"><span class="dot"></span><span id="runnerText">Local runner: off</span><small> (work in progress)</small></button>
 </header>
 <main>
