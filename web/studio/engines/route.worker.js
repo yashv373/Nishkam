@@ -19,8 +19,11 @@ export async function handle({ files, options = {} }, { log, progress, raw = () 
   const routed = r.files[`${top}_route.def`];
   const failed = /No failed routes/.test(r.out) ? 0 : +((r.out.match(/Final: Failed net routes: (\d+)/) || [])[1] ?? -1);
   const names = failed > 0 ? (r.out.split("List of failed nets follows:")[1] || "").split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("-")) : [];
+  // qrouter logs "Failure to find route start node/route on net X" for a segment it later redoes; its final verdict is the count above.
+  // Measured: with those messages present or absent (pad layer changed) the Netgen result is identical, so they do not fail the stage; list them.
+  const retried = [...new Set([...r.out.matchAll(/Failure to find route start node\/route on net (\S+?)!/g)].map((m) => m[1]))];
   return { ok: !!routed && failed === 0, files: routed ? { [`${top}_route.def`]: routed } : {},
-    summary: { top, failedNets: failed, failedNames: names, ms: Date.now() - t0, error: routed ? undefined : "qrouter wrote no DEF" } };
+    summary: { top, failedNets: failed, failedNames: names, retriedNets: retried, ms: Date.now() - t0, error: routed ? undefined : "qrouter wrote no DEF" } };
 }
 
 serve(handle);

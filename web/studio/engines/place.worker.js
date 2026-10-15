@@ -82,6 +82,9 @@ export function parseInfo(info) {
   return { scale: scale ?? 100, metal: m.filter((x) => x.pitch > 0 && x.width > 0) };
 }
 
+// The PDK's own routing tracks (gf180mcuD tracks.info, used by LibreLane make_tracks): pitch 0.56 / offset 0.28 on Metal1-4, 0.9 / 0.45 on Metal5, both directions.
+// The vendored tlef says OFFSET 0, which put the grid half a pitch away from the PDK's.
+const TRACK_OFF = { Metal1: 0.28, Metal2: 0.28, Metal3: 0.28, Metal4: 0.28, Metal5: 0.45 };
 export function place2def(top, files, fillCell, numLayersReq) {
   const { scale, metal } = parseInfo(files[".info"]);
   const numlayers = numLayersReq && numLayersReq <= metal.length ? numLayersReq : metal.length;
@@ -119,8 +122,8 @@ export function place2def(top, files, fillCell, numLayersReq) {
   const width = diextop - diexbot, height = dieytop - dieybot;
   for (let i = 0; i < numlayers; i++) {
     const L = metal[i], mp = scale * L.pitch, omp = r(mp * mult);
-    def.push(L.orient === "vertical" ? `TRACKS X ${O(diexbot)} DO ${1 + Math.trunc(width / mp)} STEP ${omp} LAYER ${L.name} ;`
-      : `TRACKS Y ${O(dieybot)} DO ${1 + Math.trunc(height / mp)} STEP ${omp} LAYER ${L.name} ;`);
+    def.push(L.orient === "vertical" ? `TRACKS X ${O(diexbot + r(scale * TRACK_OFF[L.name]))} DO ${1 + Math.trunc(width / mp)} STEP ${omp} LAYER ${L.name} ;`
+      : `TRACKS Y ${O(dieybot + r(scale * TRACK_OFF[L.name]))} DO ${1 + Math.trunc(height / mp)} STEP ${omp} LAYER ${L.name} ;`);
   }
   def.push(``);
   // obstructions along the die edge (appended to .obs; addspacers later rewrites it as .obsx)
@@ -159,9 +162,10 @@ export function place2def(top, files, fillCell, numLayersReq) {
       let v0 = Math.min(Math.max(Math.round((pos - lo) / st), 0), n - 1), found = null;
       for (const g of [2, 1]) { for (let i = 0; i < n && found === null; i++) { const v = lo + ((v0 + i) % n) * st; if (!clash(...at(v), g)) found = v; } if (found !== null) break; }
       if (found === null) throw new Error(`Too many ports (${pins.length}) for the die edge: no free pad position left for ${lab}.`);
-      if (horiz) gy = found; else gx = found;
+      // across the edge too: a pad on or past the die edge (graywolf puts top/right pads there) is not reachable (qrouter: "Failure to find route start node")
+      if (horiz) { gy = found; gx = Math.min(Math.max(gx, diexbot + pitchx), diextop - pitchx); } else { gx = found; gy = Math.min(Math.max(gy, dieybot + pitchy), dieytop - pitchy); }
       pads.push([gx, gy]);
-      pinLines.push(`- ${lab} + NET ${lab}`, `  + LAYER ${horiz ? hlayer : vlayer} ( 0 0 ) ( 1 1 )`, `  + PLACED ( ${O(gx)} ${O(gy)} ) N ;`);
+      pinLines.push(`- ${lab} + NET ${lab}`, `  + LAYER ${horiz ? hlayer : vlayer} ( 0 0 ) ( 1 1 )`, `  + PLACED ( ${O(gx + r(scale * TRACK_OFF[horiz ? hlayer : vlayer]))} ${O(gy + r(scale * TRACK_OFF[horiz ? hlayer : vlayer]))} ) N ;`);
     } else if (inst.startsWith("twfeed")) { fill.push([inst, fillCell]); }
     else {
       const mm = inst.match(/([^\s:]+):(.+)$/); // cellname:instance

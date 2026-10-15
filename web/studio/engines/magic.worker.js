@@ -50,6 +50,7 @@ export async function handle({ files, options = {} }, { log, progress, raw }) {
   if (options.extract) {
     for (const c of ["extract do local", "extract no capacitance", "extract no coupling", "extract no resistance", "extract no adjust", "extract all", "ext2spice lvs", `ext2spice -o /${top}.spice ${top}`]) cmd(c);
     res[`${top}.spice`] = mod.FS.readFile(`/${top}.spice`);
+    if (options.keepExt) for (const d of ["/w/", "/"]) if (mod.FS.analyzePath(`${d}${top}.ext`).exists) res[`${top}.ext`] = mod.FS.readFile(`${d}${top}.ext`);   // validation only
   }
   if (options.rc) {
     // Flatten so every net is driven by devices (extresist skips nets that only touch sub-cell pins), then Magic's own R/C extraction.

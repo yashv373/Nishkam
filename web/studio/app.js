@@ -492,14 +492,21 @@ async function localStage(id, io) {
     const pl = need(PD.place, "Placement");
     r = await m.run({ ...a, files: { [top + ".def"]: pl[top + ".def"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), "constraints.sdc": sdc(staOpts()) }, options: { top, timeoutS: opts.pdTimeout } });
   } else if (id === "route") r = await m.run({ ...a, files: { ...need(PD.place, "Placement"), ...PD.cts }, options: { top, timeoutS: opts.pdTimeout } });
-  else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true, rc: true, timeoutS: opts.pdTimeout } });
+  else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true, rc: true, keepExt: true, timeoutS: opts.pdTimeout } });
+  if (id === "route" && r.summary?.retriedNets?.length) io.onLog(`NOTE: qrouter logged "route start node" messages for ${r.summary.retriedNets.length} nets (${r.summary.retriedNets.slice(0, 6).join(", ")}${r.summary.retriedNets.length > 6 ? ", ..." : ""}) and then reported no failed routes. The Signoff LVS result is the check that they are connected.`);
   if (id === "route" && !r.ok && r.summary?.failedNets > 0) r.summary.error = routeMsg(r.summary);
   const sm = r.summary || {};
   if (id === "signoff" && r.ok) {   // LVS: Magic layout SPICE vs the Yosys gate netlist. A mismatch is a warning, not a crash.
     try {
       const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: PD.cts?.[top + "_cts.v"] || need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
       sm.lvs = l.summary; Object.assign(r.files, l.files);
+      if (l.summary && l.summary.match === false && r.files[top + ".ext"]) {   // name the router shorts behind the mismatch
+        const { findShorts, shortsMessage } = await import("./engines/shorts.js");
+        const sh = findShorts(new TextDecoder().decode(r.files[top + ".ext"]), new TextDecoder().decode(PD.route[top + "_route.def"]));
+        sm.lvs.shorts = sh.length; if (sh.length) io.onLog("WARNING: LVS mismatch. " + shortsMessage(sh));
+      }
     } catch (e) { sm.lvs = { error: e.message }; io.onLog("WARNING: LVS did not run: " + e.message); }
+    delete r.files[top + ".ext"];
   }
   if (r.ok) PD[id === "signoff" ? "magic" : id] = id === "cts" ? { [top + ".def"]: r.files[top + ".def"], [top + "_cts.v"]: r.files[top + "_cts.v"] } : r.files;
   if (id === "place") delete PD.cts;   // a new placement makes the old clock tree stale
