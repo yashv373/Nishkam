@@ -17,6 +17,7 @@ const f = demo("final/metrics.json");
 const sta = parseSta(demo("55-openroad-stapostpnr/max_ss_125C_4v50/max.rpt"));
 assert(sta.length > 0 && sta[0].rows.length > 5 && sta[0].met, "setup path");
 assert(Math.abs(sta[0].slack - JSON.parse(f)["timing__setup__ws__corner:max_ss_125C_4v50"]) < 1e-3, "slack matches metrics");
+assert(sta.some((p) => p.kind === "async") && sta.some((p) => p.kind === "data"), "recovery paths tagged apart from data paths");
 assert(sta[0].required > sta[0].arrival && sta[0].rows.some((r) => r.fanout != null));
 const hold = parseSta(demo("55-openroad-stapostpnr/max_ss_125C_4v50/min.rpt"));
 assert(hold.length > 0);
