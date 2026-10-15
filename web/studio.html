@@ -32,7 +32,7 @@
   <button id="runTo" title="Run up to the selected stage">Run to selected</button>
   <button id="runOne" title="Run only the selected stage">Run stage</button>
   <button id="stop" disabled>Stop</button>
-  <button id="runnerChip" class="chip st-idle" title="Local runner"><i class="dot"></i><span id="runnerTxt">runner off</span></button>
+  <button id="runnerChip" class="chip st-idle" title="Local runner"><i class="dot"></i><span id="runnerTxt">runner off</span><small> (work in progress)</small></button>
   <button id="fx" title="Turn off blur and animation" aria-pressed="false">Low effects</button>
   <button id="tourBtn" title="Take the tour" aria-label="Take the tour">?</button>
   <button id="theme" title="Theme">Theme</button>
@@ -90,6 +90,7 @@
 </main>
 <dialog id="runnerDlg">
   <h3>Connect the local runner</h3>
+  <p>Work in progress: the local runner is not validated yet. Everything else on this site runs in your browser.</p>
   <p>Physical design stages run on your machine. Double-click <code>start-runner.bat</code>, then paste the link it prints.</p>
   <input id="linkIn" placeholder="http://...#runner=...&token=..." autocomplete="off">
   <p id="linkErr" class="err"></p>

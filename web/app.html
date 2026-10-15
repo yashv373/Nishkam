@@ -111,7 +111,7 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
   <span class="tagline">Invincible is just a word.</span>
   <span class="spacer"></span>
   <a class="pill" href="studio.html" style="text-decoration:none">Open Studio</a>
-  <button id="runnerBtn" class="pill"><span class="dot"></span><span id="runnerText">Local runner: off</span></button>
+  <button id="runnerBtn" class="pill"><span class="dot"></span><span id="runnerText">Local runner: off</span><small> (work in progress)</small></button>
 </header>
 <main>
   <nav id="list"></nav>
@@ -133,6 +133,7 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
 
 <dialog id="runnerDlg">
   <h3 style="margin-top:0">Connect your machine</h3>
+  <p>Work in progress: the local runner is not validated yet. Everything else on this site runs in your browser.</p>
   <p>RTL problems run fully in your browser. Physical design (LibreLane on gf180) needs real tools, so it runs on your own computer through a small helper program. The website never gets your files; the helper only accepts this page and a secret token.</p>
   <ol>
     <li>Start the <a href="https://github.com/iic-jku/iic-osic-tools" target="_blank" rel="noopener">iic-osic-tools</a> Docker container.</li>
