@@ -315,6 +315,7 @@ function showSchematic(svg) {
       if (i) { show(i.segs, cellWords(i.type, i.width)); markSrc(i.segs); } else if (nets.has(g.id.slice(5))) net(g.id.slice(5)); else show([], g.getAttribute("s:type") || "cell"); }   // port cells are named like their net
     else if (nc) { const w = wireInfo(nc, nets);
       if (w.name) net(w.name);
+      else if (w.constant) { t.classList.add("xnet"); show([], "constant", "tied to a constant value; no source line"); markSrc([]); }
       else { hiBits(w.bits); show([], "unnamed wire", `${w.unnamed}-bit glue (split/join or constant), part of a larger signal; no source line`); markSrc([]); } }
     else { show([], null); markSrc([]); }
   };

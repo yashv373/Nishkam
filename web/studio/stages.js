@@ -31,7 +31,8 @@ export const netBits = (cls) => ((/(?:^|\s)net_([\w,]+)/.exec(cls || "") || [])[
 export function wireInfo(cls, nets) {
   const bits = netBits(cls), real = (v) => v.bits.map(String).filter((b) => !/^[01xz]$/.test(b));
   for (const pass of [(n) => !n.startsWith("$"), () => true]) for (const b of bits) { const e = /^[01xz]$/.test(b) ? null : [...nets].find(([n, v]) => pass(n) && real(v).includes(b)); if (e) return { name: e[0] }; }
-  return { unnamed: bits.length, bits };
+  const live = bits.filter((b) => !/^[01xz]$/.test(b));   // constants are tied everywhere: never highlight by them
+  return { unnamed: bits.length, bits: live, constant: !live.length };
 }
 // 1-based [first,last] line of the always block that starts on `line` (begin/end and case/endcase nesting; a bare statement ends at its ';'), else null
 export function alwaysRange(src, line) {
