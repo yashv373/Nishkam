@@ -615,10 +615,15 @@ function loadExample(ex) {
   swapProject(ex.name, ex.files, { top: ex.top, tb: ex.tb, ...ex.opts }, `Loaded example ${ex.name} (your previous files were replaced).`);
 }
 function undoLoad() { const u = undo; undo = null; if (u) swapProject(u.name, u.files, u.o, "Restored your previous files."); }
+let exView = null;   // {ex, file}: an example file shown read-only; the Project is not touched
 function drawExamples() {
   const el = $("examples"); el.replaceChildren();
-  for (const ex of EXAMPLES) { const d = h("div", "exrow"); d.append(h("b", "", ex.name), h("span", "", " " + ex.desc));
-    d.append(Object.assign(document.createElement("button"), { textContent: "Load", onclick: () => loadExample(ex) })); el.append(d); }
+  for (const ex of EXAMPLES) { const d = h("details", "exrow"), s = h("summary"); s.append(h("b", "", ex.name), h("span", "", " " + ex.desc));
+    s.append(Object.assign(document.createElement("button"), { textContent: "Load", onclick: (e) => { e.preventDefault(); loadExample(ex); } })); d.append(s);
+    d.open = exView?.ex === ex;
+    for (const f of Object.keys(ex.files)) d.append(Object.assign(h("button", "exfile" + (exView?.ex === ex && exView.file === f ? " on" : ""), f), { onclick: () => { exView = { ex, file: f }; drawExamples(); } }));
+    el.append(d); }
+  if (exView) el.append(h("div", "exban", `Example (read-only): ${exView.file}. Load ${exView.ex.name} to edit it.`), h("pre", "exsrc", exView.ex.files[exView.file]));
 }
 function drawFileBar() {
   const bar = $("filebar"); bar.replaceChildren();

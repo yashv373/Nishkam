@@ -107,7 +107,7 @@ addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(
   <span class="pmark" role="img" aria-label="Nishkam"></span>
   <h1>Nishkam Studio is invite-only for now.</h1>
   <p>Enter your access key.</p>
-  <input id="gateKey" type="text" inputmode="numeric" pattern="[0-9]*" aria-label="Access key" autofocus>
+  <input id="gateKey" type="text" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-label="Access key" autofocus>
   <button class="pbtn pri" type="submit">Enter</button>
   <p id="gateErr" role="alert"></p>
 </form></div>
