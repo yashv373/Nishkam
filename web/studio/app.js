@@ -47,14 +47,14 @@ const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
   { k: "simEngine", label: "Simulation engine", t: "select", o: [["icarus", "Icarus Verilog"], ["verilator", "Verilator (coming soon)", true]], st: ["sim"] },
   { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "floorplan", "place", "cts", "route", "sta", "signoff"] },
-  { k: "tb", label: "Testbench file", t: "file", st: ["sim"] },
+  { k: "tb", label: "Testbench", t: "file", st: ["sim"] },
   { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
   { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "floorplan", "place", "cts", "sta"] },
   { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "floorplan", "cts", "sta"], rn: true },
   { k: "inDelay", label: "Input delay (ns)", t: "number", ph: "empty = 20% of period", st: ["sta", "signoff"] },
   { k: "outDelay", label: "Output delay (ns)", t: "number", ph: "empty = 20% of period", st: ["sta", "signoff"] },
   { k: "loadPf", label: "Output load (pF)", t: "number", st: ["sta", "signoff"] },
-  { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser: experimental (qflow tools on gf180)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "pdEngine", label: "Physical engine", t: "select", o: [["auto", "Automatic (runner if connected)"], ["runner", "Runner (LibreLane)"], ["browser", "In browser: experimental (qflow tools on gf180)"]], st: ["floorplan", "place", "cts", "route", "sta", "signoff"], tip: "Automatic: uses the local runner if connected, otherwise the in-browser tools" },
   { k: "pdTimeout", label: "Browser step time limit (s)", t: "number", st: ["place", "route", "signoff"] },
   { k: "dieW", label: "Die width (um)", t: "number", st: ["floorplan", "place"], rn: true },
   { k: "dieH", label: "Die height (um)", t: "number", st: ["floorplan", "place"], rn: true },
@@ -64,15 +64,15 @@ const FIELDS = [
 function buildProps() {
   const b = $("propsBody"); b.replaceChildren();
   for (const f of FIELDS) {
-    const d = document.createElement("div"); d.className = "fld" + (f.t === "check" ? " chk" : ""); d.dataset.k = f.k;
+    const d = document.createElement("div"); d.className = "fld" + (f.t === "check" ? " chk" : ""); d.dataset.k = f.k; if (f.tip) d.title = f.tip;
     const l = document.createElement("label"); l.textContent = f.label; l.htmlFor = "o_" + f.k;
     let inp;
     if (f.t === "select" || f.t === "file") {
       inp = document.createElement("select");
-      const items = f.t === "file" ? project.list().map((n) => [n, n]) : f.o.map((x) => (Array.isArray(x) ? x : [x, x]));
+      const items = f.t === "file" ? [["", "(none)"], ...project.list().map((n) => [n, n])] : f.o.map((x) => (Array.isArray(x) ? x : [x, x]));
       for (const [v, t, dis] of items) { const o = new Option(t, v); o.disabled = !!dis; inp.add(o); }
       inp.value = opts[f.k];
-      if (f.t === "file" && !project.list().includes(opts[f.k])) inp.value = project.list().find(project.isTb) || "";
+      if (f.t === "file" && opts[f.k] && !project.list().includes(opts[f.k])) opts[f.k] = inp.value = project.list().find(project.isTb) || "";
     } else {
       inp = document.createElement("input"); if (f.ph) inp.placeholder = f.ph; inp.type = f.t === "check" ? "checkbox" : f.t === "number" ? "number" : "text";
       if (f.t === "check") inp.checked = opts[f.k]; else inp.value = opts[f.k];
@@ -279,8 +279,10 @@ function showSchematic(svg) {
 }
 
 // Surfer may drop a message sent before its wasm is ready, so send the VCD a few times.
-async function showWave(vcd) {
+async function showWave(vcd, force) {
   const el = view("Waveform"); wave?.destroy(); el.replaceChildren();
+  const mb = (vcd.length || 0) / 1e6;
+  if (!force && mb > 20) { await showTab("Waveform"); return emptyCard(el, "Large waveform", `The waveform file is ${mb.toFixed(0)} MB. Loading it can freeze this tab for a minute. It is saved in Files / Artifacts.`, false, ["Load anyway", () => showWave(vcd, true)]); }
   try {
     await showTab("Waveform"); el.replaceChildren();   // Surfer must be visible when it starts, or its canvas is 0x0
     const w = wave = (await import("./engines/surfer.js")).mount(el);
@@ -359,7 +361,10 @@ const staOpts = () => {
   return { top: opts.top, clockPort: opts.clockPort, periodNs: p, inputDelayNs: d(opts.inDelay), outputDelayNs: d(opts.outDelay), loadPf: opts.loadPf === "" || opts.loadPf == null ? 0 : +opts.loadPf };
 };
 let staN = 0;
+// Does the gate-level netlist have an input port of this name?
+const hasPort = (v, p) => new RegExp(String.raw`\binput\b[^;]*\b` + String(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + String.raw`\b`).test(typeof v === "string" ? v : "");
 async function staRun(key, files, io, propagated = false) {
+  if (!hasPort(files[opts.top + ".v"], opts.clockPort)) io.onLog(`WARNING: Clock port '${opts.clockPort}' not found; timing is unconstrained.`);
   const o = { ...staOpts(), propagated }, x = { key, label: STA_LABEL[key], sdc: sdc(o), n: ++staN };
   try {
     const r = await (await import("./engines/opensta.js")).run({ files, options: o, onLog: io.onLog, onProgress: io.onProgress, signal: io.signal });
@@ -383,6 +388,7 @@ async function localStage(id, io) {
   let r;
   if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout, headroom: [0.1, 600] } });
   else if (id === "cts") {   // placed DEF + the same SDC as Timing -> DEF with the clock tree and a netlist that has the clock buffers
+    if (!hasPort(need(outputs["netlist.v"], "Synthesis"), opts.clockPort)) { io.onLog(`Clock Tree skipped: no clock port '${opts.clockPort}' in this design.`); return { ok: true, state: "unavailable", info: "skipped: no clock in this design" }; }
     const pl = need(PD.place, "Placement");
     r = await m.run({ ...a, files: { [top + ".def"]: pl[top + ".def"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), "constraints.sdc": sdc(staOpts()) }, options: { top, timeoutS: opts.pdTimeout } });
   } else if (id === "route") r = await m.run({ ...a, files: { ...need(PD.place, "Placement"), ...PD.cts }, options: { top, timeoutS: opts.pdTimeout } });
@@ -471,11 +477,12 @@ async function start(ids) {
   running = true; abort = new AbortController(); planned = ids; frac = 0; applyFx();
   $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
   syncFromEditor(); cons.startTimer();
+  const beat = setInterval(() => { for (const [id, v] of Object.entries(state)) if (v.st === "running") cons.log(id, `${id} still running, ${Math.round((Date.now() - v.t0) / 1000)} s`); }, 15000);
   const res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
     options: () => ({ ...opts, knobs: knobs(), ...(pdLocal() ? { dontUse: QROUTER_DONT_USE } : {}) }), setState, onLog: (id, l) => cons.log(id, l),
     onProgress: (id, f) => { frac = f; setProgress(); }, onResult,
     engine: loadEngine, runnerJob, local: pdLocal, localStage });
-  running = false; abort = null; frac = 0; applyFx(); cons.stopTimer();
+  running = false; abort = null; frac = 0; applyFx(); cons.stopTimer(); clearInterval(beat);
   $("stop").disabled = true; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = false);
   if (res.ok) { setState("files", "passed", "ready"); setState("reports", "passed", "ready"); }   // the two collecting pages have nothing to run
   setProgress(); drawNav();
@@ -484,12 +491,13 @@ async function start(ids) {
 $("runAll").onclick = () => start(plan("all"));
 $("runTo").onclick = () => start(plan("to", selected));
 $("runOne").onclick = () => start(plan("one", selected));
-$("stop").onclick = () => abort?.abort();
+const stopRun = () => { if (abort && !abort.signal.aborted) { cons.log("run", "Stopped by user"); abort.abort(); } };
+$("stop").onclick = stopRun;
 $("projName").value = project.name; $("projName").onchange = (e) => { project.name = e.target.value; };
 
 // ---------- palette ----------
 const CMDS = [["Run All", () => start(plan("all"))], ["Run to selected stage", () => start(plan("to", selected))], ["Run selected stage", () => start(plan("one", selected))],
-  ["Stop", () => abort?.abort()], ["Connect local runner", () => $("runnerDlg").showModal()], ["Load demo run", loadDemo], ["Toggle theme", () => $("theme").click()],
+  ["Stop", stopRun], ["Connect local runner", () => $("runnerDlg").showModal()], ["Load demo run", loadDemo], ["Toggle theme", () => $("theme").click()],
   ["Toggle low effects", () => $("fx").click()], ["Clear console", () => cons.clear()], ...TABS.map((t) => ["Go to " + t, () => showTab(t)])];
 let palSel = 0;
 function palDraw() {
@@ -540,7 +548,7 @@ window.require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/mon
 window.require(["vs/editor/editor.main"], () => {
   editor = monaco.editor.create($("editor"), { language: "systemverilog", theme: root.dataset.theme === "dark" ? "vs-dark" : "vs", fontFamily: "JetBrains Mono, monospace",
     fontSize: 13, minimap: { enabled: false }, automaticLayout: true, scrollBeyondLastLine: false, tabSize: 2 });
-  editor.onDidChangeModelContent(() => syncFromEditor());
+  let ed; editor.onDidChangeModelContent(() => { syncFromEditor(); clearTimeout(ed); ed = setTimeout(markStale, 400); });   // an edit makes every finished stage stale
   openF(openFile);
 }, () => cons.log("editor", "WARNING: Monaco could not load (offline?). Files still run."));
 

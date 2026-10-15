@@ -30,6 +30,15 @@ assert.equal(engineId({ engine: "yosys", pick: "lintEngine" }, { lintEngine: "ve
   assert.deepEqual([t.st.floorplan, t.st.place, t.st.cts, t.st.route], ["passed", "passed", "failed", "idle"]); }
 { const t = mk(false); t.deps.engine = async () => ({ run: async () => ({ ok: true }) });
   await runStages(["schematic"], t.deps); assert.equal(t.st.schematic, "failed"); }
+{ const t = mk(false), logs = []; t.deps.onLog = (id, l) => logs.push(l);
+  await runStages(["lint", "sim", "synth"], t.deps);   // no tb: sim skipped, flow continues
+  assert.deepEqual([t.st.lint, t.st.sim, t.st.synth], ["passed", "unavailable", "passed"]);
+  const a = mk(false), l2 = []; a.deps.onLog = (id, l) => l2.push(l); await runStages(["sim"], a.deps);
+  assert.equal(a.st.sim, "failed"); assert.ok(l2.some((l) => /No testbench selected\. Pick one in Properties/.test(l)));
+  const b = mk(false); b.deps.options = () => ({ tb: "tb.v" }); await runStages(["sim"], b.deps); assert.equal(b.st.sim, "passed");
+  const m = mk(false), l3 = []; m.deps.onLog = (id, l) => l3.push(l);   // summary.messages the engine did not print reach the Console
+  m.deps.engine = async () => ({ run: async ({ onLog }) => (onLog("seen text\n"), { ok: false, summary: { errors: 1, messages: [{ severity: "error", text: "Top module 'x' not found" }, { severity: "warning", text: "seen text" }] } }) });
+  await runStages(["lint"], m.deps); assert.deepEqual(l3, ["seen text\n", "ERROR: Top module 'x' not found"]); }
 console.log("stages2 ok");
 { const t = mk(false); const seen = [];
   t.deps.local = () => true;
