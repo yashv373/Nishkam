@@ -51,5 +51,11 @@ console.log("sta", sta.length, "setup paths,", hold.length, "hold; ok");
   assert.equal(cssSafe("@import url(http://e/a.css); svg{fill:none}"), " svg{fill:none}");
   const cw = cellSrcMap('{"modules":{"m":{"cells":{"e":{"type":"$eq","parameters":{"A_WIDTH":"100","B_WIDTH":"100","Y_WIDTH":"1"}},"r":{"type":"$reduce_or","parameters":{"A_WIDTH":8,"Y_WIDTH":1}},"s":{"type":"$add","parameters":{"A_WIDTH":4,"Y_WIDTH":5}},"n":{"type":"$neg","parameters":{"A_WIDTH":4,"Y_WIDTH":4}}}}}}');
   assert.deepStrictEqual(["e", "r", "s", "n"].map((k) => cw.get(k).width), [4, 8, 5, 4]);
+  const { netBits, alwaysRange } = await import("../stages.js");
+  assert.deepStrictEqual(netBits("net_36,37,38 width_3"), ["36", "37", "38"]); assert.deepStrictEqual(netBits("net_3 width_1"), ["3"]);
+  assert.deepStrictEqual(netBits("net_1_2"), ["1", "2"]); assert.deepStrictEqual(netBits("cell_a"), []); assert.deepStrictEqual(netBits(null), []);
+  const V = "module m;\nalways @(*) begin\n  if (a) begin\n    y = 1;\n  end\n  case (s)\n  0: y = 2;\n  endcase\nend\nalways @(posedge c) q <= d;\nassign z = 1;\nendmodule";
+  assert.deepStrictEqual(alwaysRange(V, 2), [2, 9]); assert.deepStrictEqual(alwaysRange(V, 10), [10, 10]);
+  assert.equal(alwaysRange(V, 3), null); assert.equal(alwaysRange("", 1), null);
   console.log("src parser ok");
 }

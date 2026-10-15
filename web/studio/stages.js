@@ -25,6 +25,20 @@ export const parseSrc = (s) => String(s || "").split("|").flatMap((p) => {
   const m = /^(.*):(\d+)\.\d+(?:-(?:(\d+)\.)?\d+)?$/.exec(p.trim());
   return m ? [{ file: m[1], l1: +m[2], l2: +(m[3] || m[2]) }] : [];
 });
+// netlistsvg wire class "net_36,37,38 width_3" (comma list; "_" tolerated) -> ["36","37","38"]
+export const netBits = (cls) => ((/(?:^|\s)net_([\d,_]+)/.exec(cls || "") || [])[1] || "").split(/[,_]/).filter(Boolean);
+// 1-based [first,last] line of the always block that starts on `line` (begin/end and case/endcase nesting; a bare statement ends at its ';'), else null
+export function alwaysRange(src, line) {
+  const L = String(src).split("\n");
+  if (!/\balways\b/.test(L[line - 1] || "")) return null;
+  let d = 0, seen = false;
+  for (let i = line - 1; i < L.length; i++) {
+    const t = L[i].replace(/\/\/.*/, "");
+    for (const m of t.matchAll(/\b(begin|case[xz]?|end|endcase)\b/g)) { m[1].startsWith("end") ? d-- : (d++, seen = true); }
+    if (seen ? d <= 0 : /;/.test(t)) return [line, i + 1];
+  }
+  return [line, L.length];
+}
 const base = (f) => f.split(/[\\/]/).pop();
 export const srcCovers = (segs, file, line) => segs.some((g) => base(g.file) === base(file) && g.l1 <= line && line <= g.l2);
 // yosys JSON text -> Map(cell name -> {type, segs}) over all modules (the schematic ids are "cell_<name>")

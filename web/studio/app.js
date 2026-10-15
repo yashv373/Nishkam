@@ -1,5 +1,5 @@
 // Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
-import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords, svgElOk, svgAttrOk, cssSafe } from "./stages.js";
+import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords, netBits, alwaysRange, svgElOk, svgAttrOk, cssSafe } from "./stages.js";
 import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
@@ -296,20 +296,24 @@ function showSchematic(svg) {
   };
   const real = (v) => v.bits.map(String).filter((b) => !/^[01xz]$/.test(b));   // constants are strings "0"/"1"/"x"/"z", not nets
   const hiNet = (name) => { const bits = new Set(real(nets.get(name) || { bits: [] })); if (!bits.size) return false;   // wires/ports named by their yosys net
-    for (const n of sh.querySelectorAll("[class]")) { const m = /(?:^|\s)net_([\d_]+)(?:\s|$)/.exec(n.getAttribute("class")); if (m && m[1].split("_").some((b) => bits.has(b))) n.classList.add("xnet"); }
+    for (const n of sh.querySelectorAll("[class]")) { if (netBits(n.getAttribute("class")).some((b) => bits.has(b))) n.classList.add("xnet"); }
     return true; };
   const netOf = (bit) => /^[01xz]$/.test(bit) ? null : [...nets].find(([n, v]) => !n.startsWith("$") && real(v).includes(bit)) || [...nets].find(([, v]) => real(v).includes(bit));
   schem = { root: sh, cells, info };
-  schem.byLine = (file, line) => { clear(); for (const g of cells) if (srcCovers(info(g)?.segs || [], file, line)) g.classList.add("xhl"); };
+  schem.byLine = (file, line) => { clear(); let n = 0;
+    for (const g of cells) if (srcCovers(info(g)?.segs || [], file, line)) { g.classList.add("xhl"); n++; }
+    const r = !n && alwaysRange(project.get(file) || "", line);   // an `always` header line: its cells carry the if/case lines inside, so take the whole block
+    if (r) for (const g of cells) if ((info(g)?.segs || []).some((q) => q.file.split(/[\\/]/).pop() === file.split("/").pop() && q.l1 >= r[0] && q.l1 <= r[1])) g.classList.add("xhl"); };
   schem.byWord = (w) => { if (nets.has(w)) { clear(); return hiNet(w); } };
   const pick = (t) => {   // a click (no drag) on a cell, a wire, or empty space
     clear(); const g = t?.closest?.("g[id^=cell_]"), nc = [...(t?.classList || [])].find((c) => /^net_/.test(c));
     const net = (name) => { const e = nets.get(name) || {}, d = e.driver || [], segs = d.length ? d : e.segs || [];   // driver first, declaration as fallback (top inputs have no driver cell)
-      hiNet(name); show(segs, `net ${name}${d.length ? " (driven at)" : ""}`, "no source location for this net");
+      const label = name.startsWith("$") ? `internal net${segs[0] ? ` (from ${segs[0].file}:${segs[0].l1})` : ""}` : `net ${name}${d.length ? " (driven at)" : ""}`;   // $-names are yosys temporaries
+      hiNet(name); show(segs, label, "no source location for this net");
       if (d.length && fmt(d) !== fmt(e.segs || []) && e.segs?.length) peek.append(h("div", "muted", "declared at " + fmt(e.segs))); markSrc(segs); };
     if (g) { const i = info(g); g.classList.add("xhl");
       if (i) { show(i.segs, cellWords(i.type, i.width)); markSrc(i.segs); } else if (nets.has(g.id.slice(5))) net(g.id.slice(5)); else show([], g.getAttribute("s:type") || "cell"); }   // port cells are named like their net
-    else if (nc) { const e = netOf(nc.slice(4).split("_")[0]); e ? net(e[0]) : show([], null); }
+    else if (nc) { const e = netBits(nc).map(netOf).find(Boolean); e ? net(e[0]) : show([], null); }
     else { show([], null); markSrc([]); }
   };
   vp.append(inner); el.append(bar, vp, peek);
