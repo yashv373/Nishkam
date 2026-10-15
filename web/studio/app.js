@@ -468,6 +468,7 @@ async function localStage(id, io) {
     r = await m.run({ ...a, files: { [top + ".def"]: pl[top + ".def"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), "constraints.sdc": sdc(staOpts()) }, options: { top, timeoutS: opts.pdTimeout } });
   } else if (id === "route") r = await m.run({ ...a, files: { ...need(PD.place, "Placement"), ...PD.cts }, options: { top, timeoutS: opts.pdTimeout } });
   else r = await m.run({ ...a, files: need(PD.route, "Routing"), options: { top, drc: true, extract: true, rc: true, timeoutS: opts.pdTimeout } });
+  if (id === "route" && r.summary?.retriedNets?.length) io.onLog(`NOTE: qrouter logged "route start node" messages for ${r.summary.retriedNets.length} nets (${r.summary.retriedNets.slice(0, 6).join(", ")}${r.summary.retriedNets.length > 6 ? ", ..." : ""}) and then reported no failed routes. The Signoff LVS result is the check that they are connected.`);
   if (id === "route" && !r.ok && r.summary?.failedNets > 0) r.summary.error = routeMsg(r.summary);
   const sm = r.summary || {};
   if (id === "signoff" && r.ok) {   // LVS: Magic layout SPICE vs the Yosys gate netlist. A mismatch is a warning, not a crash.

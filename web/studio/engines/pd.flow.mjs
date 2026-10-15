@@ -40,13 +40,13 @@ export async function flow(top, src, log = () => {}) {
   const pl = await P.handle({ files: { [top + ".v"]: nl }, options: { top, headroom: [0.1, 600] } }, io);
   T.place = Date.now() - t0; t0 = Date.now();
   const hasClk = /posedge|negedge/.test(src) ;
-  let files = pl.files;
+  let files = pl.files, ct = null;
   if (hasClk) {
-    const ct = await C.handle({ files: { [top + ".def"]: pl.files[top + ".def"], [top + ".v"]: nl, "constraints.sdc": sdc({ top, clockPort: top === "tc" ? "c1" : "clk", periodNs: 24, inputDelayNs: 4.8, outputDelayNs: 4.8, loadPf: 0.05 }) }, options: { top } }, io);
+    ct = await C.handle({ files: { [top + ".def"]: pl.files[top + ".def"], [top + ".v"]: nl, "constraints.sdc": sdc({ top, clockPort: top === "tc" ? "c1" : "clk", periodNs: 24, inputDelayNs: 4.8, outputDelayNs: 4.8, loadPf: 0.05 }) }, options: { top } }, io);
     files = { ...pl.files, [top + ".def"]: ct.files[top + ".def"] };
   }
   T.cts = Date.now() - t0; t0 = Date.now();
-  let out = ""; const rt = await R.handle({ files, options: { top } }, { ...io, raw: (t, s) => { if (s) out += s; } });
+  let out = ""; const rt = await R.handle({ files, options: { top, cfgExtra: process.env.QCFG ? process.env.QCFG + "\n" : "" } }, { ...io, raw: (t, s) => { if (s) out += s; } });
   T.route = Date.now() - t0;
-  return { cells: pl.summary.components, die: pl.summary.die, failed: rt.summary.failedNets, names: rt.summary.failedNames, T, out, pl, rt, nl };
+  return { cells: pl.summary.components, die: pl.summary.die, failed: rt.summary.failedNets, names: rt.summary.failedNames, T, out, pl, rt, nl, ct };
 }

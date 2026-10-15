@@ -159,7 +159,8 @@ export function place2def(top, files, fillCell, numLayersReq) {
       let v0 = Math.min(Math.max(Math.round((pos - lo) / st), 0), n - 1), found = null;
       for (const g of [2, 1]) { for (let i = 0; i < n && found === null; i++) { const v = lo + ((v0 + i) % n) * st; if (!clash(...at(v), g)) found = v; } if (found !== null) break; }
       if (found === null) throw new Error(`Too many ports (${pins.length}) for the die edge: no free pad position left for ${lab}.`);
-      if (horiz) gy = found; else gx = found;
+      // across the edge too: a pad on or past the die edge (graywolf puts top/right pads there) is not reachable (qrouter: "Failure to find route start node")
+      if (horiz) { gy = found; gx = Math.min(Math.max(gx, diexbot + pitchx), diextop - pitchx); } else { gx = found; gy = Math.min(Math.max(gy, dieybot + pitchy), dieytop - pitchy); }
       pads.push([gx, gy]);
       pinLines.push(`- ${lab} + NET ${lab}`, `  + LAYER ${horiz ? hlayer : vlayer} ( 0 0 ) ( 1 1 )`, `  + PLACED ( ${O(gx)} ${O(gy)} ) N ;`);
     } else if (inst.startsWith("twfeed")) { fill.push([inst, fillCell]); }
