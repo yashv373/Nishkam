@@ -141,6 +141,7 @@ function select(id) {
 function setState(id, st, info) {
   const prev = state[id]?.st;
   state[id] = { st, info: typeof info === "string" ? info : undefined, t: 0, t0: st === "running" ? Date.now() : 0 };
+  if (id === "sim" && st === "unavailable") { wave?.destroy(); wave = null; emptyCard(view("Waveform"), "No waveform", "Simulation was skipped, so there is no waveform from this run."); }
   if (st === "running") for (const d of downstream(id)) if (["passed", "warn"].includes(state[d]?.st)) state[d].st = "stale";
   if (st === "passed" || st === "warn") cons.settle(id);
   if (st === "running" && HINT[id]) cons.log(id, `${byId(id).label}: ${HINT[id]}`);
@@ -361,7 +362,7 @@ const staOpts = () => {
 };
 let staN = 0;
 // Does the gate-level netlist have an input port of this name?
-const hasPort = (v, p) => new RegExp(String.raw`\binput\b[^;]*\b` + String(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + String.raw`\b`).test(typeof v === "string" ? v : "");
+const hasPort = (v, p) => !!p && new RegExp(String.raw`\binput\b[^;]*\b` + String(p).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + String.raw`\b`).test(typeof v === "string" ? v : "");
 async function staRun(key, files, io, propagated = false) {
   if (!hasPort(files[opts.top + ".v"], opts.clockPort)) io.onLog(`WARNING: Clock port '${opts.clockPort}' not found; timing is unconstrained.`);
   const o = { ...staOpts(), propagated }, x = { key, label: STA_LABEL[key], sdc: sdc(o), n: ++staN };
@@ -387,7 +388,7 @@ async function localStage(id, io) {
   let r;
   if (id === "place") r = await m.run({ ...a, files: { [top + ".v"]: need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout, headroom: [0.1, 600] } });
   else if (id === "cts") {   // placed DEF + the same SDC as Timing -> DEF with the clock tree and a netlist that has the clock buffers
-    if (!hasPort(need(outputs["netlist.v"], "Synthesis"), opts.clockPort)) { io.onLog(`Clock Tree skipped: no clock port '${opts.clockPort}' in this design.`); return { ok: true, state: "unavailable", info: "skipped: no clock in this design" }; }
+    if (!hasPort(need(outputs["netlist.v"], "Synthesis"), opts.clockPort)) { delete PD.cts; io.onLog(`Clock Tree skipped: no clock port '${opts.clockPort}' in this design.`); return { ok: true, state: "unavailable", info: "skipped: no clock in this design" }; }
     const pl = need(PD.place, "Placement");
     r = await m.run({ ...a, files: { [top + ".def"]: pl[top + ".def"], [top + ".v"]: need(outputs["netlist.v"], "Synthesis"), "constraints.sdc": sdc(staOpts()) }, options: { top, timeoutS: opts.pdTimeout } });
   } else if (id === "route") r = await m.run({ ...a, files: { ...need(PD.place, "Placement"), ...PD.cts }, options: { top, timeoutS: opts.pdTimeout } });
@@ -477,11 +478,14 @@ async function start(ids) {
   $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
   syncFromEditor(); cons.startTimer();
   const beat = setInterval(() => { for (const [id, v] of Object.entries(state)) if (v.st === "running") cons.log(id, `${id} still running, ${Math.round((Date.now() - v.t0) / 1000)} s`); }, 15000);
-  const res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
+  let res = { ok: false };
+  try { res = await runStages(ids, { hasRunner: () => !!runnerInfo, signal: abort.signal, files: filesFor, seed: outputs,
     options: () => ({ ...opts, knobs: knobs(), ...(pdLocal() ? { dontUse: QROUTER_DONT_USE } : {}) }), setState, onLog: (id, l) => cons.log(id, l),
     onProgress: (id, f) => { frac = f; setProgress(); }, onResult,
-    engine: loadEngine, runnerJob, local: pdLocal, localStage });
-  running = false; abort = null; frac = 0; applyFx(); cons.stopTimer(); clearInterval(beat);
+    engine: loadEngine, runnerJob, local: pdLocal, localStage }); }
+  catch (e) { cons.log("run", "ERROR: " + e.message); } finally { clearInterval(beat); }
+  if (staleLater) { staleLater = false; markStale(); }
+  running = false; abort = null; frac = 0; applyFx(); cons.stopTimer();
   $("stop").disabled = true; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = false);
   if (res.ok) { setState("files", "passed", "ready"); setState("reports", "passed", "ready"); }   // the two collecting pages have nothing to run
   setProgress(); drawNav();
@@ -490,7 +494,7 @@ async function start(ids) {
 $("runAll").onclick = () => start(plan("all"));
 $("runTo").onclick = () => start(plan("to", selected));
 $("runOne").onclick = () => start(plan("one", selected));
-const stopRun = () => { if (abort && !abort.signal.aborted) { cons.log("run", "Stopped by user"); abort.abort(); } };
+const stopRun = () => { if (abort && !abort.signal.aborted) { cons.log(Object.keys(state).find((k) => state[k].st === "running") || selected, "Stopped by user"); abort.abort(); } };
 $("stop").onclick = stopRun;
 $("projName").value = project.name; $("projName").onchange = (e) => { project.name = e.target.value; };
 
@@ -524,7 +528,7 @@ addEventListener("keydown", (e) => {
 // Open the file that defines the top module first (falls back to the first file).
 let editor, openFile = project.list().find((n) => new RegExp(String.raw`\bmodule\s+${opts.top}\b`).test(project.get(n) || "")) || project.list()[0];
 const models = {};
-let tabEx = false, undo = null;
+let staleLater = false, tabEx = false, undo = null;
 function swapProject(name, files, o, msg) {
   project.replace(files, name); Object.assign(opts, o); store.set("studio:opts", opts);
   for (const k in models) { models[k].dispose(); delete models[k]; }
@@ -569,7 +573,7 @@ window.require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/mon
 window.require(["vs/editor/editor.main"], () => {
   editor = monaco.editor.create($("editor"), { language: "systemverilog", theme: root.dataset.theme === "dark" ? "vs-dark" : "vs", fontFamily: "JetBrains Mono, monospace",
     fontSize: 13, minimap: { enabled: false }, automaticLayout: true, scrollBeyondLastLine: false, tabSize: 2 });
-  let ed; editor.onDidChangeModelContent(() => { syncFromEditor(); clearTimeout(ed); ed = setTimeout(markStale, 400); });   // an edit makes every finished stage stale
+  let ed; editor.onDidChangeModelContent(() => { syncFromEditor(); clearTimeout(ed); ed = setTimeout(() => { if (running) staleLater = true; else markStale(); }, 400); });   // an edit makes every finished stage stale
   openF(openFile);
 }, () => cons.log("editor", "WARNING: Monaco could not load (offline?). Files still run."));
 
