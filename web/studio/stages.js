@@ -30,9 +30,12 @@ export const srcCovers = (segs, file, line) => segs.some((g) => base(g.file) ===
 // yosys JSON text -> Map(cell name -> {type, segs}) over all modules (the schematic ids are "cell_<name>")
 export function cellSrcMap(json) {
   const m = new Map(), nets = new Map();
-  try { for (const mod of Object.values(JSON.parse(json).modules || {})) {
-    for (const [n, c] of Object.entries(mod.cells || {})) m.set(n, { type: c.type, segs: parseSrc(c.attributes?.src), width: cellWidth(c.parameters) });
-    for (const [n, w] of Object.entries(mod.netnames || {})) nets.set(n, { bits: w.bits || [], segs: parseSrc(w.attributes?.src) }); } } catch {}
+  try { const mods = Object.values(JSON.parse(json).modules || {}), mod = mods.find((x) => Number(x.attributes?.top) === 1) || mods[0];   // netlistsvg draws this one only
+    const drv = new Map();   // bit -> src of the cell whose output drives it
+    for (const [n, c] of Object.entries(mod.cells || {})) { const segs = parseSrc(c.attributes?.src);
+      m.set(n, { type: c.type, segs, width: cellWidth(c.parameters) });
+      for (const [p, bits] of Object.entries(c.connections || {})) if (c.port_directions?.[p] === "output" && segs.length) for (const b of bits) if (!drv.has(b)) drv.set(b, segs); }
+    for (const [n, w] of Object.entries(mod.netnames || {})) nets.set(n, { bits: w.bits || [], segs: parseSrc(w.attributes?.src), driver: (w.bits || []).map((b) => drv.get(b)).find(Boolean) || [] }); } catch {}
   m.nets = nets;   // net name -> {bits, segs}: the wire's declaration/driver line
   return m;
 }

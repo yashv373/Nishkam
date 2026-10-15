@@ -32,5 +32,14 @@ console.log("sta", sta.length, "setup paths,", hold.length, "hold; ok");
   assert(srcCovers(g, "a.v", 13) && !srcCovers(g, "a.v", 15) && !srcCovers(g, "b.v", 13) && !srcCovers([], "a.v", 1));
   const cm = cellSrcMap('{"modules":{"m":{"cells":{"c1":{"type":"$and","attributes":{"src":"a.v:3.1-3.5"}},"c2":{"type":"x"}}}}}');
   assert.equal(cm.get("c1").segs[0].l1, 3); assert.deepStrictEqual(cm.get("c2").segs, []); assert.equal(cellSrcMap("not json").size, 0);
+  const J = { modules: {
+    sub: { cells: { u0: { type: "$or", attributes: { src: "s.v:1.1-1.5" } } }, netnames: { x: { bits: [9], attributes: { src: "s.v:1.1-1.2" } } } },
+    top: { attributes: { top: 1 }, cells: { u0: { type: "$and", parameters: { Y_WIDTH: "00000000000000000000000000000001" }, attributes: { src: "a.v:12.3-12.9" }, port_directions: { A: "input", Y: "output" }, connections: { A: [2], Y: [4] } } },
+      netnames: { a: { bits: [2], attributes: { src: "a.v:2.1-2.9" } }, y: { bits: [4], attributes: { src: "a.v:3.1-3.9" } } } } } };
+  const c2 = cellSrcMap(JSON.stringify(J));
+  assert.equal(c2.get("u0").type, "$and"); assert.equal(c2.get("u0").width, 1); assert(!c2.nets.has("x"), "only the top module is indexed");
+  assert.equal(cellSrcMap(JSON.stringify({ modules: { sub: J.modules.sub } })).get("u0").type, "$or", "no top attribute: first module");
+  assert.deepStrictEqual(c2.nets.get("y").driver, [{ file: "a.v", l1: 12, l2: 12 }]);   // driven by the $and, not the declaration (line 3)
+  assert.deepStrictEqual(c2.nets.get("y").segs[0].l1, 3); assert.deepStrictEqual(c2.nets.get("a").driver, []);   // input port: declaration only
   console.log("src parser ok");
 }

@@ -299,7 +299,9 @@ function showSchematic(svg) {
   schem.byWord = (w) => { if (nets.has(w)) { clear(); return hiNet(w); } };
   const pick = (t) => {   // a click (no drag) on a cell, a wire, or empty space
     clear(); const g = t?.closest?.("g[id^=cell_]"), nc = [...(t?.classList || [])].find((c) => /^net_/.test(c));
-    const net = (name) => { const segs = nets.get(name)?.segs || []; hiNet(name); show(segs, "net " + name, "no source location for this net"); markSrc(segs); };
+    const net = (name) => { const e = nets.get(name) || {}, d = e.driver || [], segs = d.length ? d : e.segs || [];   // driver first, declaration as fallback (top inputs have no driver cell)
+      hiNet(name); show(segs, `net ${name}${d.length ? " (driven at)" : ""}`, "no source location for this net");
+      if (d.length && fmt(d) !== fmt(e.segs || []) && e.segs?.length) peek.append(h("div", "muted", "declared at " + fmt(e.segs))); markSrc(segs); };
     if (g) { const i = info(g); g.classList.add("xhl");
       if (i) { show(i.segs, cellWords(i.type, i.width)); markSrc(i.segs); } else if (nets.has(g.id.slice(5))) net(g.id.slice(5)); else show([], g.getAttribute("s:type") || "cell"); }   // port cells are named like their net
     else if (nc) { const e = netOf(nc.slice(4).split("_")[0]); e ? net(e[0]) : show([], null); }
