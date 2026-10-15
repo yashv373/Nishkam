@@ -1,5 +1,6 @@
 // Nishkam Studio: wires the shell together. Heavy things (Monaco, engines, viewers) load on demand.
-import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords, netBits, wireInfo, alwaysRange, svgElOk, svgAttrOk, cssSafe } from "./stages.js";
+import { STAGES, byId, plan, runStages, downstream, engineId, stageOf, parseLoose, countCells, MAX_SCHEMATIC_CELLS, srcCovers, cellSrcMap, cellWords, netBits, wireInfo, pathModel, pathToRtl, segsOverlap, alwaysRange, svgElOk, svgAttrOk, cssSafe } from "./stages.js";
+import { parseSta } from "./viewers/sta-parser.js";
 import { renderNavigator, HINT } from "./navigator.js";
 import { createConsole, createRawConsole } from "./console.js";
 import { setRawSink } from "./engines/_rpc.js";
@@ -268,6 +269,7 @@ function showSchematic(svg) {
   const bar = h("div", "sbar");
   for (const [k, t] of [["rtl", "RTL (readable)"], ["gate", "Gate level"]]) { const b = h("button", opts.schematic === k ? "on" : "", t);
     b.onclick = () => { if (running) return; opts.schematic = k; store.set("studio:opts", opts); start(["schematic"]); }; bar.append(b); }
+  const pb = h("button", "", "Worst path"); pb.title = "Highlight the worst setup path from the Timing (STA) stage"; pb.disabled = !staPath(); bar.append(pb);
   const vp = h("div", "svp"), inner = h("div", "sin"), peek = h("div", "speek");
   const sh = inner.attachShadow({ mode: "open" });   // shadow root: the SVG's own <style> (svg{fill:none}, text{...}) must not leak into the page
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml"), root = doc.documentElement;
@@ -278,7 +280,7 @@ function showSchematic(svg) {
     if (n.nodeName === "style") n.textContent = cssSafe(n.textContent);
   }
   const st = document.createElement("style");
-  st.textContent = "svg{display:block}.xhl>:not(text){stroke:#ff6a00!important;stroke-width:2.5px}.xnet{stroke:#ff6a00!important;stroke-width:3px!important}g[id^=cell_]{cursor:pointer}line,path{pointer-events:stroke}";
+  st.textContent = "svg{display:block}.xhl>:not(text){stroke:#ff6a00!important;stroke-width:2.5px}.xnet{stroke:#ff6a00!important;stroke-width:3px!important}.dimp>:not(.xpath):not(style){opacity:.18}.xpath>:not(text){stroke:#ff2d55!important;stroke-width:2.5px}line.xpath{stroke:#ff2d55!important;stroke-width:3px!important}g[id^=cell_]{cursor:pointer}line,path{pointer-events:stroke}";
   sh.append(document.importNode(root, true), st);
   const svgEl = sh.firstChild, cells = [...svgEl.querySelectorAll("g[id^=cell_]")], meta = schemMeta;
   const info = (g) => meta.get(g.id.slice(5));
@@ -299,7 +301,21 @@ function showSchematic(svg) {
     for (const n of sh.querySelectorAll("[class]")) { if (netBits(n.getAttribute("class")).some((b) => bits.has(b))) n.classList.add("xnet"); }
     return true; };
   const hiNet = (name) => hiBits(real(nets.get(name) || { bits: [] }));   // wires/ports named by their yosys net
-  schem = { root: sh, cells, info };
+  schem = { root: sh, cells, info, pathBtn: pb };
+  const clearPath = () => { svgEl.classList.remove("dimp"); for (const n of sh.querySelectorAll(".xpath")) n.classList.remove("xpath"); pb.classList.remove("on"); };
+  pb.onclick = () => {   // worst setup path: exact in the gate view, mapped through source lines in the RTL view
+    if (pb.classList.contains("on")) { clearPath(); show([], null); return; }
+    const sp = staPath(); if (!sp) return; clearPath(); clear();
+    const m = pathModel(sp.path, sp.json), gate = opts.schematic === "gate", list = m.insts.map((i) => `${i} (${(sp.path.rows.find((r) => r.pin.replace(/\\/g, "").startsWith(i + "/"))?.cell) || "?"})`);
+    let note = "", on = [];
+    if (gate) { on = cells.filter((g) => m.insts.includes(g.id.slice(5))); hiPathBits(m.bits); }
+    else { const { segs, noSrc } = pathToRtl(m, cellSrcMap(sp.json)); on = cells.filter((g) => segsOverlap(info(g)?.segs || [], segs));
+      note = ` Approximate (mapped through source lines)${noSrc ? `; ${noSrc} cell${noSrc > 1 ? "s" : ""} had no source line` : ""}.`; }
+    for (const g of on) g.classList.add("xpath");
+    svgEl.classList.add("dimp"); pb.classList.add("on");
+    peek.replaceChildren(h("b", "", `Worst setup path: ${m.start} → ${m.end}, slack ${m.slack} ns, ${m.insts.length} cells.${note}`), h("pre", "", gate ? list.join("\n") : on.length + " RTL cells lit"));
+  };
+  const hiPathBits = (list) => { const bits = new Set(list); for (const n of sh.querySelectorAll("[class]")) if (netBits(n.getAttribute("class")).some((b) => bits.has(b))) n.classList.add("xpath"); };
   schem.byLine = (file, line) => { clear(); let n = 0;
     for (const g of cells) if (srcCovers(info(g)?.segs || [], file, line)) { g.classList.add("xhl"); n++; }
     const r = !n && alwaysRange(project.get(file) || "", line);   // an `always` header line: its cells carry the if/case lines inside, so take the whole block
@@ -328,6 +344,11 @@ function showSchematic(svg) {
     const end = (u) => { vp.removeEventListener("pointermove", mv); vp.removeEventListener("pointerup", end); vp.removeEventListener("pointercancel", end);
       if (u.type === "pointerup" && Math.hypot(u.clientX - x0, u.clientY - y0) < 4) pick(t); };
     vp.addEventListener("pointerup", end); vp.addEventListener("pointercancel", end); };
+}
+// Worst setup path of the pre-layout STA run + the gate netlist, or null until both exist.
+function staPath() {
+  const r = outputs["browser/sta/stapostpnr/pre-layout/max.rpt"], nj = outputs["netlist.json"]; if (!r || !nj) return null;
+  const path = parseSta(typeof r === "string" ? r : new TextDecoder().decode(r))[0]; return path ? { path, json: typeof nj === "string" ? nj : new TextDecoder().decode(nj) } : null;
 }
 // Schematic <-> source. schemMeta: cell name -> {type, segs} from the yosys JSON of the drawn view.
 let schem = null, schemMeta = new Map(), srcDec = null, quiet = false;
@@ -377,6 +398,7 @@ function staShow(r, id) {
     ctx.staInfo = Object.fromEntries(e.map(([k, x]) => [k, { label: x.label, sdc: x.sdc, error: x.error, n: x.n, power: x.summary && x.summary.total_uW }]));
   }
   const paths = Object.keys(r.files || {}).filter((p) => p.startsWith("browser/"));
+  if (schem?.pathBtn) schem.pathBtn.disabled = !staPath();
   if (id === "sta") { regBrowser(paths); showTab("Timing"); }
   else { for (const v of Object.values(viewers)) v.inst.update?.(ctx); bnote(curTab); }
 }
