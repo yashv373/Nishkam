@@ -60,7 +60,7 @@ export async function handle({ files, options = {} }, { log, progress, raw = () 
   const outFiles = {};
   for (const f of m3.FS.readdir("/")) // whatever $dumpfile named it
     if (/\.vcd$/i.test(f)) outFiles[f] = m3.FS.readFile("/" + f, { encoding: "utf8" });
-  const hasFinish = names.some((n) => /\$finish/.test(text(files[n])));
+  const hasFinish = names.some((n) => /\$finish/.test(text(files[n]).replace(/\/\*[^]*?\*\/|\/\/.*/g, "")));
   if (hitLimit) return { ok: false, files: outFiles, summary: { stage: "sim", error: hasFinish ? `simulation stopped at the ${limit} time-unit limit of simulated time before the testbench called $finish` : `simulation did not finish within ${limit} time units: the testbench never calls $finish, add one`, stdout: out.join("\n"), vcd: Object.keys(outFiles)[0] || null } };
   return { ok: true, files: outFiles, summary: { stdout: out.join("\n"), vcd: Object.keys(outFiles)[0] || null, warnings: diag } };
 }
