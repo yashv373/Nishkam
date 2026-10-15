@@ -19,6 +19,7 @@ export const DESIGNS = {
   mult8: ["m8", "module m8(input [7:0] a, b, output [15:0] p); assign p = a * b; endmodule"],
   mult10: ["m10", "module m10(input [9:0] a, b, output [19:0] p); assign p = a * b; endmodule"],
   rmult20: ["rm", "module rm(input clk, input [19:0] a, b, output reg [39:0] p); reg [19:0] ra, rb; always @(posedge clk) begin ra <= a; rb <= b; p <= ra * rb; end endmodule"],
+  pins40: ["pn", "module pn(input [39:0] a, output y, z); assign y = &a[3:0]; assign z = |a[39:36]; endmodule"],
   adder: ["ad", "module ad(input [7:0] a, b, output [8:0] s, output [7:0] x); assign s = a + b; assign x = a ^ b; endmodule"],
 };
 export async function flow(top, src, log = () => {}) {
@@ -39,11 +40,12 @@ export async function flow(top, src, log = () => {}) {
   T.route = Date.now() - t0;
   return { cells: pl.summary.components, die: pl.summary.die, failed: rt.summary.failedNets, names: rt.summary.failedNames, T, out, pl, rt, nl };
 }
-const names = process.argv[2] ? [process.argv[2]] : ["twoclk", "twoclk2", "twoclk3", "adder", "mult8"];
+const names = process.argv[2] ? [process.argv[2]] : ["twoclk", "twoclk2", "twoclk3", "adder", "pins40", "mult8"];
 let fail = 0;
 for (const n of names) {
   const r = await flow(...DESIGNS[n]);
   const ok = r.failed === 0; fail += !ok;
+  if (!ok) console.log(r.out.split("\n").filter((l) => /^Error|Tap geometry|^Grid/.test(l)).slice(0, 12).join("\n"));
   console.log(ok ? "PASS" : "FAIL", n, `${r.cells} cells, failed nets ${r.failed} ${r.names.join(" ")}, ${JSON.stringify(r.T)}`);
 }
 process.exit(fail ? 1 : 0);
