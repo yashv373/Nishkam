@@ -1,0 +1,12 @@
+name = "nishkam-api"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nishkam"
+database_id = "REPLACE_AFTER_wrangler_d1_create"
+
+[vars]
+FRONTEND_URL = "https://nishkam.world/app.html"
+# DEV_FAKE_LOGIN must never be set here. Local only, via .dev.vars.

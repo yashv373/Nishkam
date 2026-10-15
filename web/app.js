@@ -166,7 +166,7 @@ async function submitRtl() {
   busy = false; renderButtons();
   if (p !== current) return;
   if (res.passed && res.cdc) {
-    solved.add(p.id); store.set("solved", [...solved]); renderList(); renderAid();
+    solved.add(p.id); store.set("solved", [...solved]); recordSolve(p.id, typeof code === "string" ? { [`${p.top || p.id}.v`]: code } : {}); renderList(); renderAid();
     $("result").innerHTML = `<div class="banner ok big">✓ Accepted
         <small>The crossing is built correctly, and no check failed in the first ${res.steps} clock events. This is a bounded check, not a proof. ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
       <p class="actions">${nextStep()}</p>`;
@@ -175,7 +175,7 @@ async function submitRtl() {
     $("result").innerHTML = `<div class="banner bad">Not a safe crossing<small>${res.structural.map(esc).join("<br>")}</small></div>
       <p class="muted">This is a structure rule, so there is no step table. Fix the net named above and submit again.</p>`;
   } else if (res.passed) {
-    solved.add(p.id); store.set("solved", [...solved]); renderList(); renderAid();
+    solved.add(p.id); store.set("solved", [...solved]); recordSolve(p.id, typeof code === "string" ? { [`${p.top || p.id}.v`]: code } : {}); renderList(); renderAid();
     const kinds = res.stat?.kinds?.map(([k, n]) => `${n}× ${k}`).join(", ") || "";
     $("result").innerHTML = `<div class="banner ok big">✓ Accepted
         <small>${res.proved ? "Proved equal to the reference for all cycles after reset." : `Matches the reference for the first ${DEPTH} cycles after reset (a full proof was not possible).`} ${solvedN()} of ${PROBLEMS.length} solved.</small></div>
@@ -287,7 +287,7 @@ async function runFlow(p, files, knobs, target = $("result")) {
   const m = s.metrics || {};
   const checks = (p.checks || []).map(([k, op, want, label]) => ({ label, v: m[k], ok: m[k] != null && OPS[op](m[k], want), rule: `${op} ${fmt(want)}` }));
   const allOk = s.state === "done" && checks.every((c) => c.ok);
-  if (p.checks && allOk) { solved.add(p.id); store.set("solved", [...solved]); renderList(); }
+  if (p.checks && allOk) { solved.add(p.id); store.set("solved", [...solved]); recordSolve(p.id, typeof code === "string" ? { [`${p.top || p.id}.v`]: code } : {}); renderList(); }
   setTimeout(() => { if (target.id === "result" && allOk) { target.insertAdjacentHTML("afterbegin", `<p class="actions">${nextStep()} <span class="muted">${solvedN()} of ${PROBLEMS.length} solved</span></p>`); wireNext(); } }, 0);
   const banner = s.state !== "done"
     ? `<div class="banner bad">Flow failed<small>LibreLane stopped early. The end of the log usually says why.</small></div>`
@@ -306,3 +306,41 @@ async function runFlow(p, files, knobs, target = $("result")) {
 }
 
 checkRunner();
+
+// ---------- optional sign-in (backend v0). If the API is down, nothing here shows or throws. ----------
+const API = "http://localhost:8787"; // set to the deployed API (e.g. https://api.nishkam.world) when live
+let signedIn = false;
+const api = (path, body) => fetch(API + path, { credentials: "include", ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
+function recordSolve(problem, files) {
+  if (signedIn) api("/solve", { problem, files }).then(refreshMe).catch(() => {});
+}
+function showMe(me) {
+  const b = $("signin");
+  b.hidden = false;
+  if (me) {
+    signedIn = true;
+    b.href = "#"; b.title = "Click to sign out";
+    b.innerHTML = `<span aria-hidden="true">●</span><span class="stext"> ${esc(me.name)} · ${me.points} point${me.points === 1 ? "" : "s"}</span>`;
+    b.onclick = (e) => { e.preventDefault(); api("/logout", {}).catch(() => {}).then(() => location.reload()); };
+  } else {
+    b.href = API + "/auth/github";
+    b.innerHTML = `<span aria-hidden="true">⎆</span><span class="stext"> Sign in with GitHub</span>`;
+  }
+}
+async function refreshMe() {
+  try {
+    const r = await api("/me");
+    if (r.status === 401) return showMe(null);
+    if (!r.ok) return;
+    const me = await r.json();
+    // first sign-in on this browser: upload solves kept in localStorage
+    const extra = [...solved].filter((id) => !me.solved.includes(id) && /^[a-z0-9-]{1,64}$/.test(id));
+    if (extra.length && !store.get("uploaded", false)) {
+      store.set("uploaded", true);
+      await Promise.all(extra.map((id) => api("/solve", { problem: id, files: {} }).catch(() => {})));
+      return refreshMe();
+    }
+    showMe(me);
+  } catch { /* backend unreachable: page works as before, pill stays hidden */ }
+}
+refreshMe();
