@@ -63,5 +63,18 @@ console.log("sta", sta.length, "setup paths,", hold.length, "hold; ok");
   assert.equal(wireInfo("net_x,7 width_2", nn).name, "w"); assert.equal(wireInfo("net_6,40,41", nn).name, "w");
   assert.deepStrictEqual(wireInfo("net_226,227,228 width_3", nn), { unnamed: 3, bits: ["226", "227", "228"], constant: false });   // never empty
   assert.deepStrictEqual(wireInfo("net_x,x width_2", nn), { unnamed: 2, bits: [], constant: true }); assert.deepStrictEqual(wireInfo("net_1,0,300", nn), { unnamed: 3, bits: ["300"], constant: false });
+  const { pathModel, pathToRtl, segsOverlap } = await import("../stages.js");
+  const gj = JSON.stringify({ modules: { tiny8: { attributes: { top: 1 }, cells: {
+    _330_: { type: "mux4", attributes: { src: "tiny8.v:40.3-44.9" }, connections: { S0: [11], Z: [12] } },
+    _340_: { type: "oai31", attributes: {}, connections: { B: [12], ZN: [13] } },
+    input15: { type: "dlyb", attributes: { src: "tiny8.v:5.1-5.9" }, connections: { I: [2], Z: [3] } } } } } });
+  const pm = pathModel(sta[0], gj);
+  assert(pm.insts.length > 5 && pm.insts.includes("_330_") && !pm.insts.includes("instr[8]"), "ports skipped, instances in path order");
+  assert.equal(pm.insts[0], "input15"); assert.equal(pm.slack, sta[0].slack); assert.equal(pm.end, "_493_");
+  assert.deepStrictEqual(pm.bits.sort(), ["11", "12", "13", "2", "3"], "net bits of the path pins found in the netlist");
+  const pr = pathToRtl({ insts: ["_330_", "_340_", "nope"] }, cellSrcMap(gj));
+  assert.equal(pr.noSrc, 2); assert.deepStrictEqual(pr.segs, [{ file: "tiny8.v", l1: 40, l2: 44 }]);
+  assert(segsOverlap([{ file: "tiny8.v", l1: 43, l2: 43 }], pr.segs) && !segsOverlap([{ file: "tiny8.v", l1: 45, l2: 46 }], pr.segs) && !segsOverlap([{ file: "o.v", l1: 41, l2: 41 }], pr.segs));
+  assert.deepStrictEqual(pathModel(sta[0], "bad json").bits, []);
   console.log("src parser ok");
 }
