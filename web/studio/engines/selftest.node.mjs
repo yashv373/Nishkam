@@ -34,4 +34,22 @@ await t("sim: free-running clock stops with a clear message", (r) => !r.ok && /d
 await t("sim: errors show the real file name", (r) => !r.ok && /bad_tb\.v/.test(r.summary.error) && !/\/f\d/.test(r.summary.error), () => I.handle({ files: { "bad_tb.v": "module t; initial begin x = ; end endmodule" } }, noop));
 
 if (s) console.log(JSON.stringify(s.summary).slice(0, 300));
+
+// --- names: every instance OpenSTA reports in max.rpt must be a cell key in netlist.json (worst-path highlighting relies on it) ---
+{
+  const O = await import("./opensta.worker.js"), { parseSta } = await import("../viewers/sta-parser.js"), { PROBLEMS } = await import("../../problems.js");
+  const shreg4 = "module shreg4(input clk, rst_n, din, output dout); reg [3:0] s; always @(posedge clk or negedge rst_n) if (!rst_n) s <= 0; else s <= {s[2:0], din}; assign dout = s[3]; endmodule";
+  const designs = [["shreg4", { "shreg4.v": shreg4 }], ["tiny8", PROBLEMS.find((p) => p.id === "squeeze-tiny8").files]];
+  for (const [top, fs] of designs) await t("names: STA instances are netlist.json cells, " + top, (r) => r === true, async () => {
+    const y = await Y.handle({ mode: "synth", files: fs, options: { top } }, noop);
+    const nl = JSON.parse(y.files["netlist.json"]), ms = Object.values(nl.modules), cells = (ms.find((m) => Number(m.attributes?.top) === 1) || ms[0]).cells;
+    const st = await O.handle({ files: { [top + ".v"]: y.files["netlist.v"] }, options: { top, clockPort: "clk", periodNs: 10, inputDelayNs: 2, outputDelayNs: 2, loadPf: 0.05 } }, noop);
+    const insts = new Set(parseSta(st.files["max.rpt"]).flatMap((p) => p.rows.filter((r) => r.pin.includes("/")).map((r) => r.pin.slice(0, r.pin.lastIndexOf("/")).replace(/\\/g, ""))));
+    const bad = [...insts].filter((i) => !(i in cells)); if (bad.length) console.log("missing", bad.slice(0, 5));
+    const { pathModel, pathToRtl, cellSrcMap, segsOverlap } = await import("../stages.js"), ps = parseSta(st.files["max.rpt"]), wp = ps.find((p) => p.kind === "data");
+    const pm = pathModel(wp, y.files["netlist.json"]), { segs } = pathToRtl(pm, cellSrcMap(y.files["netlist.json"])), rtlHit = [...cellSrcMap(y.files["rtl.json"])].filter(([, c]) => segsOverlap(c.segs, segs)).length;
+    console.log("  ", top, "worst data path", wp.start, "->", wp.end, pm.insts.length, "cells,", rtlHit, "RTL cells lit");
+    return insts.size > 0 && !bad.length && wp && pm.insts.length > 0 && rtlHit > 0;
+  });
+}
 process.exit(fail ? 1 : 0);

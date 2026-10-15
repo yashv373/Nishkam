@@ -88,6 +88,7 @@ export function synthScript({ srcs, top, noattr = true, flatten = true, dontUse 
     `insbuf -buf ${o.buffer.split("/").join(" ")}`, // SYNTH_DIRECT_WIRE_BUFFERING
     "tee -o chk.rpt check",
     `tee -o stat.json stat -json ${lib}`, `tee -o stat.txt stat ${lib}`,
+    "rename -enumerate",   // same cell/wire names in netlist.v (what OpenSTA reports) and netlist.json (what the schematic uses); the writer would otherwise rename $-names to _N_ in the .v only
     `write_verilog ${noattr ? "-noattr " : ""}-noexpr -nohex -nodec -defparam netlist.v`,
     "write_json netlist.json",
   ];

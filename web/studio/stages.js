@@ -34,6 +34,27 @@ export function wireInfo(cls, nets) {
   const live = bits.filter((b) => !/^[01xz]$/.test(b));   // constants are tied everywhere: never highlight by them
   return { unnamed: bits.length, bits: live, constant: !live.length };
 }
+// ---- worst-path highlighting. `path` = one parseSta() path; `json` = gate-level netlist.json text.
+// -> {start,end,slack,insts:[names in path order],bits:[net bits on the path pins]}. Port rows (no "/") are skipped.
+export function pathModel(path, json) {
+  let cells = {}; try { const ms = Object.values(JSON.parse(json).modules || {}); cells = (ms.find((x) => Number(x.attributes?.top) === 1) || ms[0]).cells || {}; } catch {}
+  const insts = [], bits = new Set();
+  for (const r of path.rows.filter((x) => x.section === "data")) {
+    const i = r.pin.lastIndexOf("/"); if (i < 0) continue;
+    const inst = r.pin.slice(0, i).replace(/\\/g, ""), pin = r.pin.slice(i + 1);
+    if (!insts.includes(inst)) insts.push(inst);
+    for (const b of cells[inst]?.connections?.[pin] || []) if (typeof b === "number") bits.add(String(b));
+  }
+  return { start: path.start, end: path.end, slack: path.slack, insts, bits: [...bits] };
+}
+const overlap = (a, b) => a.some((p) => b.some((q) => base(p.file) === base(q.file) && p.l1 <= q.l2 && q.l1 <= p.l2));
+// RTL view: the gate instances' src ranges -> {segs, noSrc: how many path cells had none}. rtlCellSegs: Map-like name->{segs} of the RTL view.
+export function pathToRtl(model, gateMap) {
+  const segs = []; let noSrc = 0;
+  for (const n of model.insts) { const s = gateMap.get(n)?.segs || []; s.length ? segs.push(...s) : noSrc++; }
+  return { segs, noSrc };
+}
+export const segsOverlap = overlap;
 // 1-based [first,last] line of the always block that starts on `line` (begin/end and case/endcase nesting; a bare statement ends at its ';'), else null
 export function alwaysRange(src, line) {
   const L = String(src).split("\n");
