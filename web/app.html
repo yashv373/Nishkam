@@ -63,17 +63,17 @@ button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid v
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 button#submit { min-height: 44px; }
 button:disabled { opacity: .5; cursor: default; }
-header { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header { display: flex; align-items: center; gap: 8px; padding: 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); }
 .logotype { display: inline-block; aspect-ratio: 5033 / 1855; height: 28px; background: var(--ink);
   -webkit-mask: url(brand/wordmark-latin.svg) center / contain no-repeat; mask: url(brand/wordmark-latin.svg) center / contain no-repeat; }
 .mark { display: inline-block; aspect-ratio: 2262 / 1686; height: 24px; background: var(--accent);
   -webkit-mask: url(brand/mark.svg) center / contain no-repeat; mask: url(brand/mark.svg) center / contain no-repeat; }
-.tagline { color: var(--muted); font-style: italic; }
+.tipwrap { position: relative; display: inline-flex; } .tip { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; padding: 8px 12px; border-radius: 12px; font-size: 12px; white-space: nowrap; color: #fff; background: rgba(18,20,30,.85); border: 1px solid rgba(255,255,255,.16); opacity: 0; visibility: hidden; transition: opacity .15s; pointer-events: none; } .tipwrap:hover .tip, .tipwrap:focus-within .tip { opacity: 1; visibility: visible; }
 .spacer { flex: 1; }
-.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 12.5px; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 12.5px; }
 .pill { min-height: 30px; box-sizing: border-box; white-space: nowrap; }
-@media (max-width: 699px) { .nophone, .keynote, header .tagline { display: none !important; } }
+@media (max-width: 699px) { .nophone { display: none !important; } }
 .dd { position: relative; } .ddtrg { border: 0; cursor: pointer; color: var(--ink); } .ddtrg svg { opacity: .7; transition: transform .15s; } .dd.open .ddtrg svg { transform: rotate(180deg); }
 .av { width: 22px; height: 22px; border-radius: 50%; background: #1430ff; color: #fff; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; object-fit: cover; }
 .ddpanel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; min-width: 220px; max-width: calc(100vw - 32px); padding: 6px; border-radius: 16px; color: #fff; background: rgba(18,20,30,.72); backdrop-filter: blur(22px) saturate(1.6); -webkit-backdrop-filter: blur(22px) saturate(1.6); border: 1px solid rgba(255,255,255,.16); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 18px 40px rgba(0,0,0,.45); opacity: 0; transform: translateY(-4px) scale(.97); transform-origin: top right; visibility: hidden; transition: opacity .14s, transform .14s, visibility 0s .14s; }
@@ -84,7 +84,7 @@ header { display: flex; align-items: center; gap: 16px; padding: 16px 18px; bord
 .ddpanel .mi:hover, .ddpanel .mi:focus-visible { background: rgba(255,255,255,.12); outline: none; } .ddpanel .mi.adm { color: #8fa0ff; font-weight: 600; } .ddpanel .mi.adm:hover, .ddpanel .mi.adm:focus-visible { background: rgba(20,48,255,.35); color: #fff; }
 @media (prefers-reduced-motion: reduce) { .ddpanel, .ddtrg svg { transition: none; } }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.pill[hidden] { display: none; } .pill.on .dot { background: var(--ok); } .pill.on { color: var(--ink); }
+.pill[hidden], #auth[hidden] { display: none; } .pill.on .dot { background: var(--ok); } .pill.on { color: var(--ink); }
 main { flex: 1; display: grid; grid-template-columns: 260px minmax(280px, 1fr) minmax(380px, 1.25fr); min-height: 0; }
 nav { border-right: 1px solid var(--line); overflow: auto; padding: 10px; }
 nav h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 14px 8px 6px; }
@@ -137,11 +137,10 @@ dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--p
 dialog::backdrop { background: rgba(0,0,0,.35); }
 dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; white-space: pre-wrap; }
 @media (max-width: 900px) {
-  .pill small, .keynote, .stext { display: none; }   /* both notes made the header ~500px wide on phones; Studio is desktop-only anyway */
+  .pill small, .stext { display: none; }   /* both notes made the header ~500px wide on phones; Studio is desktop-only anyway */
   main { display: block; overflow: auto; }
   nav, #statement { border-right: 0; border-bottom: 1px solid var(--line); }
   #work { min-height: 80vh; }
-  .tagline { display: none; }
 }
 </style>
 <script type="module" src="site.js"></script>
@@ -149,11 +148,11 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
 <body>
 <header>
   <a class="brand" href="./" style="color:inherit;text-decoration:none" aria-label="Nishkam home"><span class="logotype"></span></a>
-  <span class="tagline">Invincible is just a word.</span>
   <span class="spacer"></span>
-  <a class="pill nophone" href="studio.html" style="text-decoration:none" title="Studio needs an access key.">Open Studio</a><small class="keynote" style="opacity:.55;font-size:11px;white-space:nowrap">Studio needs an access key.</small>
-  <span id="auth" hidden></span>
+  <span id="pts" class="pill" hidden></span>
+  <span class="tipwrap nophone"><a class="pill" href="studio.html" aria-describedby="studiotip" style="text-decoration:none">Open Studio</a><span id="studiotip" role="tooltip" class="tip">Studio needs an access key.</span></span>
   <button id="runnerBtn" class="pill nophone"><span class="dot"></span><span id="runnerText">Local runner: off</span><small> (work in progress)</small></button>
+  <span id="auth" hidden></span>
 </header>
 <main>
   <nav id="list"></nav>

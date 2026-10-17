@@ -326,7 +326,7 @@ function showAuth() {
     if (fbUser.photoURL) { const i = new Image(22, 22); i.alt = ""; i.referrerPolicy = "no-referrer"; i.src = fbUser.photoURL; i.className = "av"; trg.append(i); }
     else { const i = document.createElement("span"); i.className = "av"; i.setAttribute("aria-hidden", "true"); i.textContent = (fbUser.displayName || fbUser.email || "?")[0].toUpperCase(); trg.append(i); }
     const full = fbUser.displayName || fbUser.email || "Signed in";
-    const t = document.createElement("span"); t.textContent = full.split(/\s+/)[0] + (me ? ` · ${me.points} pt${me.points === 1 ? "" : "s"}` : "");
+    const t = document.createElement("span"); t.textContent = full.split(/\s+/)[0];
     trg.append(t);
     const hd = document.createElement("div"); hd.className = "mh"; const n = document.createElement("b"); n.textContent = full; hd.append(n);
     if (me?.handle) { const hh = document.createElement("span"); hh.textContent = "@" + me.handle; hd.append(hh); }
@@ -356,6 +356,7 @@ function showAuth() {
   box.replaceChildren(wrap);
   if (menuOpen) { wrap.classList.add("open"); trg.setAttribute("aria-expanded", "true"); }
   box.hidden = false;
+  const pt = $("pts"); pt.hidden = !(fbUser && me); if (me) pt.textContent = `${me.points} point${me.points === 1 ? "" : "s"}`;
 }
 document.addEventListener("click", (e) => { const w = document.querySelector(".dd.open"); if (w && !w.contains(e.target)) { w.classList.remove("open"); w.firstChild.setAttribute("aria-expanded", "false"); menuOpen = false; } });
 async function refreshMe() {
