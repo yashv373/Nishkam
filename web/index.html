@@ -357,6 +357,7 @@ footer::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;po
 .paused::before,.paused::after,.paused *,.paused .beam::before{animation-play-state:paused!important}
 @media (prefers-reduced-motion:reduce){.lo.reveal,.flowt tbody tr{opacity:1!important;filter:none!important;transform:none!important}.marq div,.scan,.beam,footer::before,.mission.next::before,#what::before,.steps::after{animation:none!important}.marq{overflow-x:auto}}
 </style>
+<noscript><style>.reveal,.lo.reveal,.flowt tbody tr{opacity:1!important;filter:none!important;transform:none!important}</style></noscript>
 </head>
 <body>
 
@@ -654,6 +655,8 @@ document.querySelectorAll(".flowt tbody tr").forEach((tr, i) => tr.style.setProp
 document.querySelectorAll(".card").forEach((c) => c.insertAdjacentHTML("beforeend", '<i class="beam" aria-hidden="true"></i>'));
 document.querySelector(".wave").insertAdjacentHTML("beforeend", '<i class="scan" aria-hidden="true"></i>');
 document.querySelectorAll("#what,#how,#proof,#problems,#flow,.mission.next,footer").forEach((el) => { el.classList.add("paused"); watch(el, (v) => el.classList.toggle("paused", !v)); });
+// safety: anything still hidden 2.5 s after it reaches the screen is shown
+document.querySelectorAll(".reveal").forEach((el) => { const o = new IntersectionObserver((es) => { if (es[0].isIntersecting) { setTimeout(() => el.classList.add("in"), 2500); o.disconnect(); } }); o.observe(el); });
 </script>
 </body>
 </html>
