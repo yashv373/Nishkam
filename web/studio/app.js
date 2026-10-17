@@ -34,9 +34,10 @@ $("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" 
   window.monaco?.editor.setTheme(root.dataset.theme === "dark" ? "vs-dark" : "vs"); };
 
 // ---------- options (Properties panel) ----------
-const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", vMode: "formal", vDepth: 20, vInit: "undef", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
+const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "", tb: "", vMode: "formal", vDepth: 20, vInit: "undef", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
   clockPeriod: 40, inDelay: "", outDelay: "", loadPf: 0.05, pdEngine: "auto", pdTimeout: 120, dieW: 170, dieH: 170, density: 50, congestion: false };
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
+if (project.cleared) { opts.top = ""; opts.tb = ""; store.set("studio:opts", opts); }   // old default project dropped: no example leftovers in Properties
 // studio.html#demo=squeeze-tiny8 : the Practice page's "try it in the browser" link
 if (location.hash === "#demo=squeeze-tiny8") {
   const ex = EXAMPLES.find((x) => x.id === "squeeze-tiny8");
@@ -633,7 +634,7 @@ async function runnerJob({ from, to, ids }) {
 async function start(ids) {
   if (running || !ids.length) return;
   hideGuide();
-  if (!project.list().length) { cons.log("run", "ERROR: The project has no files. Open Examples and load one, or upload your own."); tabEx = true; showTab("Editor"); drawFileBar(); return; }
+  if (!project.list().length) { cons.log("run", "ERROR: The project has no files. Open Examples ▾ and load one, or upload your own."); showTab("Editor"); drawFileBar(); return; }
   running = true; abort = new AbortController(); planned = ids; frac = 0; applyFx();
   $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
   syncFromEditor(); cons.startTimer();
@@ -686,46 +687,65 @@ addEventListener("keydown", (e) => {
 
 // ---------- editor (Monaco, loaded on demand) ----------
 // Open the file that defines the top module first (falls back to the first file).
-let editor, openFile = project.list().find((n) => new RegExp(String.raw`\bmodule\s+${opts.top}\b`).test(project.get(n) || "")) || project.list()[0];
+let editor, openFile = project.list().find((n) => opts.top && new RegExp(String.raw`\bmodule\s+${opts.top}\b`).test(project.get(n) || "")) || project.list()[0];
 const models = {};
-let staleLater = false, tabEx = !project.list().length, undo = null;   // empty project: open on Examples
+let staleLater = false, undo = null;
 function swapProject(name, files, o, msg) {
   project.replace(files, name); Object.assign(opts, o); store.set("studio:opts", opts);
   editor?.setModel(null); for (const k in models) { models[k].dispose(); delete models[k]; }
   $("projName").value = project.name; buildProps(); markStale(); cons.log("files", msg);
-  tabEx = false; openF(project.list()[0]);
+  openF(project.list()[0]);
 }
 function loadExample(ex) {
   undo = { name: project.name, files: project.all(), o: { ...opts } };
   swapProject(ex.name, ex.files, { top: ex.top, tb: ex.tb, ...ex.opts }, `Loaded example ${ex.name} (your previous files were replaced).`);
 }
 function undoLoad() { const u = undo; undo = null; if (u) swapProject(u.name, u.files, u.o, "Restored your previous files."); }
-let exView = null;   // {ex, file}: an example file shown read-only; the Project is not touched
-function drawExamples() {
-  const el = $("examples"); el.replaceChildren();
-  for (const ex of EXAMPLES) { const d = h("details", "exrow"), s = h("summary"); s.append(h("b", "", ex.name), h("span", "", " " + ex.desc));
-    s.append(Object.assign(document.createElement("button"), { textContent: "Load", onclick: (e) => { e.preventDefault(); loadExample(ex); } })); d.append(s);
-    d.open = exView?.ex === ex;
-    for (const f of Object.keys(ex.files)) d.append(Object.assign(h("button", "exfile" + (exView?.ex === ex && exView.file === f ? " on" : ""), f), { onclick: () => { exView = { ex, file: f }; drawExamples(); } }));
-    el.append(d); }
-  if (exView) el.append(h("div", "exban", `Example (read-only): ${exView.file}. Load ${exView.ex.name} to edit it.`), h("pre", "exsrc", exView.ex.files[exView.file]));
+let exMenuOpen = false;
+function examplesMenu(bar) {   // UX.md rule 6: WAI-ARIA menu button. The panel is fixed-position because the file bar scrolls sideways and would clip it.
+  const trg = h("button", "", "Examples ▾"); trg.setAttribute("aria-haspopup", "menu"); trg.setAttribute("aria-expanded", String(exMenuOpen)); trg.id = "exTrg";
+  const pnl = h("div", "ddpanel exmenu"); pnl.setAttribute("role", "menu"); pnl.id = "exPanel"; pnl.hidden = !exMenuOpen;
+  for (const ex of EXAMPLES) { const b = h("button", "mi"); b.setAttribute("role", "menuitem"); b.tabIndex = -1; b.append(h("b", "", ex.name), h("span", "", ex.desc));
+    b.onclick = () => { close(false); loadExample(ex); }; pnl.append(b); }
+  const items = () => [...pnl.querySelectorAll('[role="menuitem"]')];
+  const place = () => { const r = trg.getBoundingClientRect(); pnl.style.left = Math.min(r.left, innerWidth - 340) + "px"; pnl.style.top = r.bottom + 4 + "px"; };
+  function close(back) { exMenuOpen = false; pnl.hidden = true; trg.setAttribute("aria-expanded", "false"); removeEventListener("click", away, true); if (back) trg.focus(); }
+  function away(e) { if (!pnl.contains(e.target) && e.target !== trg) close(false); }
+  const open = () => { exMenuOpen = true; place(); pnl.hidden = false; trg.setAttribute("aria-expanded", "true"); addEventListener("click", away, true); items()[0]?.focus(); };
+  trg.onclick = () => (exMenuOpen ? close(true) : open());
+  trg.onkeydown = (e) => { if (["ArrowDown", "Enter", " "].includes(e.key) && !exMenuOpen) { e.preventDefault(); open(); } };
+  pnl.onkeydown = (e) => { const l = items(), i = l.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); close(true); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); l[(i + 1) % l.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); l[(i - 1 + l.length) % l.length].focus(); }
+    else if (e.key === "Tab") close(false); };
+  document.body.querySelector("#exPanel")?.remove(); document.body.append(pnl); bar.append(trg);
+  if (exMenuOpen) { removeEventListener("click", away, true); addEventListener("click", away, true); place(); }
+}
+function autoTop() {   // blank Top module / Testbench: fill from the files (first module in a non-testbench file)
+  const mod = (n) => /module\s+(\w+)/.exec(project.get(n) || "")?.[1];
+  if (!opts.top) { const n = project.list().find((f) => !project.isTb(f) && mod(f)); if (n) opts.top = mod(n); }
+  if (!opts.tb) { const n = project.list().find((f) => project.isTb(f)); if (n) opts.tb = n; }
+  store.set("studio:opts", opts); buildProps();
 }
 function drawFileBar() {
   const bar = $("filebar"); bar.replaceChildren();
-  let ex = $("examples"); if (!ex) { ex = Object.assign(document.createElement("div"), { id: "examples" }); $("editor").before(ex); }
-  ex.hidden = !tabEx; $("editor").hidden = tabEx; if (tabEx) drawExamples(); else editor?.layout();
-  for (const t of ["Project", "Examples"]) { const b = document.createElement("button"); b.textContent = t; b.className = (t === "Examples") === tabEx ? "on" : ""; b.onclick = () => { tabEx = t === "Examples"; drawFileBar(); }; bar.append(b); }
-  if (undo) bar.append(Object.assign(document.createElement("button"), { textContent: "Undo load", onclick: undoLoad }));
-  if (tabEx) return;
+  const empty = !project.list().length;
+  let ex = $("examples"); if (!ex) { ex = Object.assign(h("div", "", "No files yet. Start from an example (Examples ▾) or add your own (+ New, Upload)."), { id: "examples" }); $("editor").before(ex); }
+  ex.hidden = !empty; $("editor").hidden = empty; if (!empty) editor?.layout();
+  bar.append(h("span", "flabel", "Project"));
   for (const n of project.list()) { const b = document.createElement("button"); b.textContent = n; b.className = n === openFile ? "on" : ""; b.onclick = () => openF(n); bar.append(b); }
   const mk = (t, f, title) => { const b = document.createElement("button"); b.textContent = t; b.title = title; b.onclick = f; bar.append(b); };
-  mk("+ New", () => { const n = prompt("New file name (.v .sv .vh)"); if (n) try { project.add(n, `module ${n.replace(/\..*/, "")};\nendmodule\n`); openF(n); buildProps(); } catch (e) { alert(e.message); } }, "New file");
+  mk("+ New", () => { const n = prompt("New file name (.v .sv .vh)"); if (n) try { project.add(n, `module ${n.replace(/\..*/, "")};\nendmodule\n`); openF(n); autoTop(); } catch (e) { alert(e.message); } }, "New file");
   const up = Object.assign(document.createElement("input"), { type: "file", multiple: true, accept: ".v,.sv,.vh,.svh", hidden: true });
-  up.onchange = async () => { for (const f of up.files) try { project.add(f.name, await f.text()); } catch (e) { project.set(f.name, await f.text()); } up.value = ""; openF(openFile); buildProps(); };
+  up.onchange = async () => { for (const f of up.files) try { project.add(f.name, await f.text()); } catch (e) { project.set(f.name, await f.text()); } up.value = ""; openF(project.list().includes(openFile) ? openFile : project.list()[0]); autoTop(); };
   mk("Upload", () => up.click(), "Upload files");
+  if (!empty) {
   mk("Rename", () => { const n = prompt("Rename to", openFile); if (n && n !== openFile) try { project.rename(openFile, n); models[openFile]?.dispose(); delete models[openFile]; openF(n); buildProps(); } catch (e) { alert(e.message); } }, "Rename file");
   mk("Delete", () => { if (project.list().length > 1 && confirm("Delete " + openFile + "?")) { project.remove(openFile); models[openFile]?.dispose(); delete models[openFile]; openF(project.list()[0]); buildProps(); } }, "Delete file");
-  bar.append(up);
+  }
+  examplesMenu(bar); bar.append(up);
+  if (undo) bar.append(Object.assign(document.createElement("button"), { textContent: "Undo load", onclick: undoLoad }));
 }
 function openF(n) {
   openFile = n; drawFileBar(); if (!editor || !n) return;
