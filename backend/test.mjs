@@ -21,6 +21,7 @@ await rejects(await mint({ aud: "x" }), "aud");
 await rejects(await mint({ iss: "https://securetoken.google.com/x" }), "iss");
 await rejects(await mint({ exp: NOW - 1 }), "exp");
 await rejects(await mint({ sub: "" }), "sub");
+await rejects(await mint({ auth_time: NOW + 9999 }), "auth_time in future");
 await rejects(await mint({}, other.privateKey), "signature");
 
 // (b) quota, flags, admin against a tiny fake D1 (only the statements the worker uses)

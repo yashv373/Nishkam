@@ -10,10 +10,16 @@ const enc = new TextEncoder(), dec = new TextDecoder();
 const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 const part = (s) => JSON.parse(dec.decode(unb64(s)));
 
-// Cached for the life of the isolate. ponytail: ignores Cache-Control max-age; an unknown kid forces one refetch.
-let cache = null;
+// Cached until the response's max-age runs out. A forced refetch (unknown kid) is allowed at most once a minute,
+// so random kids cannot make every request hit Google.
+let cache = null, expires = 0, fetched = 0;
 export async function fetchKeys(force) {
-  if (!cache || force) cache = (await (await fetch(JWKS_URL)).json()).keys;
+  const t = Date.now();
+  if (!cache || t >= expires || (force && t - fetched > 60000)) {
+    const r = await fetch(JWKS_URL);
+    cache = (await r.json()).keys; fetched = t;
+    expires = t + 1000 * (+/max-age=(\d+)/.exec(r.headers.get("Cache-Control") || "")?.[1] || 3600);
+  }
   return cache;
 }
 
@@ -29,7 +35,7 @@ export async function verify(token, projectId, keys, now = Math.floor(Date.now()
   if (!(await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, unb64(p[2]), enc.encode(p[0] + "." + p[1])))) throw new Error("signature");
   if (c.iss !== `https://securetoken.google.com/${projectId}`) throw new Error("iss");
   if (c.aud !== projectId) throw new Error("aud");
-  if (!(c.exp > now) || !(c.iat <= now + 300)) throw new Error("time");
+  if (!(c.exp > now) || !(c.iat <= now + 300) || (c.auth_time !== undefined && !(c.auth_time <= now + 300))) throw new Error("time");
   if (typeof c.sub !== "string" || !c.sub) throw new Error("sub");
   return c;
 }
@@ -115,6 +121,7 @@ export async function handle(req, env, getKeys = fetchKeys) {
     // ponytail: read-modify-write; two simultaneous solves can lose one, harmless (re-solving adds it back).
     const u = await env.DB.prepare("SELECT solved, code FROM users WHERE uid=?").bind(uid).first();
     const s = new Set(JSON.parse(u.solved || "[]")); s.add(pid);
+    if (s.size > 100) return json({ error: "too many problems" }, 400); // stops a row growing without bound
     const code = JSON.parse(u.code || "{}");
     if (Object.keys(files).length) code[pid] = [{ at: now, files }, ...(code[pid] || [])].slice(0, KEEP); // last 2 per problem
     await env.DB.prepare("UPDATE users SET solved=?, code=? WHERE uid=?").bind(JSON.stringify([...s]), JSON.stringify(code), uid).run();
@@ -131,7 +138,7 @@ export async function handle(req, env, getKeys = fetchKeys) {
       { role: "system", content: SYSTEM },
       { role: "user", content: `Problem:\n${b.problemText}\n\nStudent code:\n${b.userRtl}\n\nFirst failing cycles:\n${b.cycleTable}` }] });
     const hint = clean(r?.response || "");
-    if (!hint) throw new Error("empty");
+    if (!hint) return json({ error: "The explainer had nothing safe to say. Try again later." }, 502); // charged: refunding empty output would allow unlimited free AI calls
     await env.DB.prepare("INSERT INTO reviews (uid,at) VALUES (?,?)").bind(uid, now).run();
     const u = await env.DB.prepare("SELECT reviews_used FROM users WHERE uid=?").bind(uid).first();
     return json({ hint, reviews_left: Math.max(0, QUOTA - u.reviews_used) });
