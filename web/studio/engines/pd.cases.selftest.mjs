@@ -14,9 +14,8 @@ console.log("PASS short finder");
 const rn = retriedNets("Error:  Failure to find route start node/route on net a!\nError:  Failure to find route end node/route on net b!\nError:  Failure to find route start node/route on net a!");
 if (rn.join() !== "a,b") { console.log("FAIL retried nets", rn); process.exit(1); }
 console.log("PASS retried nets");
-// These must also match Netgen, with no router short found. pins40 is left out: an unused input's pad can sit under another net's wire
-// (qrouter does not treat single-node nets as obstacles), which merges two ports in Magic.
-const LVS = new Set(["twoclk", "adder", "adder2", "tiny8", "mult8"]);
+// These must also match Netgen, with no router short found. pins40 checks that an unused input's pad gets no other net's wire (#18).
+const LVS = new Set(["twoclk", "adder", "adder2", "pins40", "tiny8", "mult8"]);
 const names = process.argv[2] ? [process.argv[2]] : ["twoclk", "twoclk2", "twoclk3", "adder", "adder2", "pins40", "tiny8", "mult8"];
 let fail = 0;
 for (const n of names) {
