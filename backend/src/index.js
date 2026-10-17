@@ -1,0 +1,100 @@
+const ORIGINS = ["https://nishkam.world", "http://localhost:8000"];
+const JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
+const MODEL = "@cf/qwen/qwen2.5-coder-32b-instruct";
+const QUOTA = 2, MAX_BODY = 20 * 1024;
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+const part = (s) => JSON.parse(dec.decode(unb64(s)));
+
+// Cached for the life of the isolate. ponytail: ignores Cache-Control max-age; an unknown kid forces one refetch.
+let cache = null;
+export async function fetchKeys(force) {
+  if (!cache || force) cache = (await (await fetch(JWKS_URL)).json()).keys;
+  return cache;
+}
+
+// Returns the token's claims, or throws. keys = JWK list, now = seconds.
+export async function verify(token, projectId, keys, now = Math.floor(Date.now() / 1000)) {
+  const p = String(token).split(".");
+  if (p.length !== 3) throw new Error("malformed");
+  const h = part(p[0]), c = part(p[1]);
+  if (h.alg !== "RS256") throw new Error("alg");
+  const jwk = keys.find((k) => k.kid === h.kid);
+  if (!jwk) throw new Error("kid");
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  if (!(await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, unb64(p[2]), enc.encode(p[0] + "." + p[1])))) throw new Error("signature");
+  if (c.iss !== `https://securetoken.google.com/${projectId}`) throw new Error("iss");
+  if (c.aud !== projectId) throw new Error("aud");
+  if (!(c.exp > now) || !(c.iat <= now + 300)) throw new Error("time");
+  if (typeof c.sub !== "string" || !c.sub) throw new Error("sub");
+  return c;
+}
+
+const SYSTEM = `You are a teaching assistant for a digital hardware design practice site. A student's Verilog failed an equivalence check against a hidden reference. You get the problem, the student's code and a table of the first failing cycles.
+Explain in plain words what goes wrong and on which signal and cycle, and give one direction to look. Keep it under 120 words.
+Hard rules: NEVER write Verilog or any corrected code, not even one line. Do not guess at the reference design. Words only.`;
+
+const FENCE = /```[\s\S]*?(```|$)/g;
+const VLOG = /^\s*(assign\s|always(_ff|_comb|_latch)?\s*(@|\()|module\s+\w+\s*[#(]|endmodule|endcase|begin\s*$|end\s*$|(input|output|inout|wire|reg|logic)\s*(\[|\w+\s*[,;)])|(if|else if|for|case)\s*\(.*\)\s*(begin)?\s*$)|;\s*$/;
+export const clean = (t) => String(t).replace(FENCE, "").split("\n").filter((l) => !VLOG.test(l)).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+
+export async function handle(req, env, getKeys = fetchKeys) {
+  const origin = req.headers.get("Origin"), ok = ORIGINS.includes(origin);
+  const cors = ok ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : { Vary: "Origin" };
+  const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...cors } });
+  if (req.method === "OPTIONS")
+    return ok ? new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET,POST", "Access-Control-Allow-Headers": "Authorization,Content-Type", "Access-Control-Max-Age": "86400" } }) : new Response(null, { status: 403 });
+  if (origin && !ok) return json({ error: "origin not allowed" }, 403);
+
+  const path = new URL(req.url).pathname;
+  if (!["/me", "/me/solved", "/review"].includes(path)) return json({ error: "not found" }, 404);
+  if (req.method !== (path === "/me" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
+
+  const tok = /^Bearer (.+)$/.exec(req.headers.get("Authorization") || "")?.[1];
+  let claims;
+  try {
+    try { claims = await verify(tok, env.FIREBASE_PROJECT_ID, await getKeys()); }
+    catch (e) { if (e.message !== "kid") throw e; claims = await verify(tok, env.FIREBASE_PROJECT_ID, await getKeys(true)); } // key rotated
+  } catch { return json({ error: "not signed in" }, 401); }
+  const uid = claims.sub;
+  await env.DB.prepare("INSERT INTO users (uid,email,name,created) VALUES (?,?,?,?) ON CONFLICT(uid) DO UPDATE SET email=excluded.email, name=excluded.name")
+    .bind(uid, claims.email || "", claims.name || "", Date.now()).run();
+
+  if (path === "/me") {
+    const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used FROM users WHERE uid=?").bind(uid).first();
+    return json({ ...u, solved: JSON.parse(u.solved || "[]"), reviews_left: Math.max(0, QUOTA - u.reviews_used) });
+  }
+
+  const text = await req.text();
+  if (enc.encode(text).length > MAX_BODY) return json({ error: "too big" }, 413);
+  let b; try { b = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
+  if (typeof b?.problemId !== "string" || !/^[a-z0-9-]{1,64}$/.test(b.problemId)) return json({ error: "bad problem id" }, 400);
+
+  if (path === "/me/solved") {
+    // ponytail: read-modify-write; two simultaneous solves can lose one, harmless (re-solving adds it back).
+    const u = await env.DB.prepare("SELECT solved FROM users WHERE uid=?").bind(uid).first();
+    const s = new Set(JSON.parse(u.solved || "[]")); s.add(b.problemId);
+    await env.DB.prepare("UPDATE users SET solved=? WHERE uid=?").bind(JSON.stringify([...s]), uid).run();
+    return json({ ok: true, solved: [...s] });
+  }
+
+  // /review: take one use atomically first, refund if the AI call fails.
+  for (const k of ["problemText", "userRtl", "cycleTable"]) if (typeof b[k] !== "string" || !b[k]) return json({ error: "missing " + k }, 400);
+  const take = await env.DB.prepare("UPDATE users SET reviews_used=reviews_used+1 WHERE uid=? AND reviews_used<?").bind(uid, QUOTA).run();
+  if (take.meta.changes !== 1) return json({ error: "No free explanations left." }, 429);
+  try {
+    const r = await env.AI.run(MODEL, { max_tokens: 400, messages: [
+      { role: "system", content: SYSTEM },
+      { role: "user", content: `Problem:\n${b.problemText}\n\nStudent code:\n${b.userRtl}\n\nFirst failing cycles:\n${b.cycleTable}` }] });
+    const hint = clean(r?.response || "");
+    if (!hint) throw new Error("empty");
+    const u = await env.DB.prepare("SELECT reviews_used FROM users WHERE uid=?").bind(uid).first();
+    return json({ hint, reviews_left: Math.max(0, QUOTA - u.reviews_used) });
+  } catch {
+    await env.DB.prepare("UPDATE users SET reviews_used=reviews_used-1 WHERE uid=? AND reviews_used>0").bind(uid).run();
+    return json({ error: "The explainer failed. You were not charged. Try again." }, 502);
+  }
+}
+
+export default { fetch: (req, env) => handle(req, env) };

@@ -201,9 +201,11 @@ async function submitRtl() {
       : `Your design differs from the reference at cycle ${c.first}.`;
     $("result").innerHTML = `<div class="banner bad">Wrong answer<small>${what}</small></div>
       ${cexTable(c)}
+      <div id="explain"></div>
       <p class="actions"><button class="primary" id="again">Fix it and submit again</button>
       <button id="spec">Show the spec</button></p>`;
     $("again").onclick = () => editor.focus();
+    offerExplain(p, code, c);
     $("spec").onclick = () => $("statement").scrollIntoView({ block: "start", behavior: "smooth" });
   } else {
     $("result").innerHTML = explainError(res.log || "", res.error);
@@ -307,41 +309,77 @@ async function runFlow(p, files, knobs, target = $("result")) {
 
 checkRunner();
 
-// ---------- optional sign-in (backend v0). If the API is down, nothing here shows or throws. ----------
-const API = location.hostname === "localhost" ? "http://localhost:8787" : null; // null = no backend calls at all. Set to the deployed API (e.g. https://api.nishkam.world) when live
-let signedIn = false;
-const api = (path, body) => fetch(API + path, { credentials: "include", ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}) });
-function recordSolve(problem, files) {
-  if (signedIn) api("/solve", { problem, files }).then(refreshMe).catch(() => {});
+// ---------- optional sign-in + "explain this failure" (needs web/config.js filled in; otherwise nothing shows) ----------
+let auth = null, fbUser = null, reviewsLeft = null, API = "";
+const authHdr = async () => ({ Authorization: "Bearer " + await fbUser.getIdToken(), "Content-Type": "application/json" });
+const api = async (path, body) => fetch(API + path, { method: body ? "POST" : "GET", headers: await authHdr(), body: body && JSON.stringify(body) });
+function recordSolve(problem) {
+  if (fbUser) api("/me/solved", { problemId: problem }).catch(() => {});
 }
-function showMe(me) {
-  const b = $("signin");
-  b.hidden = false;
-  if (me) {
-    signedIn = true;
-    b.href = "#"; b.title = "Click to sign out";
-    b.innerHTML = `<span aria-hidden="true">●</span><span class="stext"> ${esc(me.name)} · ${me.points} point${me.points === 1 ? "" : "s"}</span>`;
-    b.onclick = (e) => { e.preventDefault(); api("/logout", {}).catch(() => {}).then(() => location.reload()); };
+function showAuth() {
+  const box = $("auth");
+  if (fbUser) {
+    const img = fbUser.photoURL ? `<img src="${esc(fbUser.photoURL)}" alt="" width="22" height="22" style="border-radius:50%" referrerpolicy="no-referrer">` : `<span aria-hidden="true">●</span>`;
+    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}</span></button>`;
+    $("signout").onclick = () => auth.mod.signOut(auth.auth);
   } else {
-    b.href = API + "/auth/github";
-    b.innerHTML = `<span aria-hidden="true">⎆</span><span class="stext"> Sign in with GitHub</span>`;
+    box.innerHTML = `<button class="pill" id="signin">Sign in</button>`;
+    $("signin").onclick = () => {
+      box.innerHTML = `<span class="pill">Sign in with <button id="gG" class="pill">Google</button><button id="gH" class="pill">GitHub</button></span>`;
+      const go = (P) => () => auth.mod.signInWithPopup(auth.auth, new auth.mod[P]()).catch(showAuth);
+      $("gG").onclick = go("GoogleAuthProvider"); $("gH").onclick = go("GithubAuthProvider");
+    };
   }
+  box.hidden = false;
 }
 async function refreshMe() {
-  if (!API) return;
   try {
     const r = await api("/me");
-    if (r.status === 401) return showMe(null);
     if (!r.ok) return;
     const me = await r.json();
+    reviewsLeft = me.reviews_left;
     // first sign-in on this browser: upload solves kept in localStorage
     const extra = [...solved].filter((id) => !me.solved.includes(id) && /^[a-z0-9-]{1,64}$/.test(id));
-    if (extra.length && !store.get("uploaded", false)) {
-      store.set("uploaded", true);
-      await Promise.all(extra.map((id) => api("/solve", { problem: id, files: {} }).catch(() => {})));
-      return refreshMe();
-    }
-    showMe(me);
-  } catch { /* backend unreachable: page works as before, pill stays hidden */ }
+    await Promise.all(extra.map((id) => api("/me/solved", { problemId: id }).catch(() => {})));
+  } catch { /* backend unreachable: page works as before */ }
 }
-refreshMe();
+async function initAuth() {
+  let cfg; try { cfg = (await import("./config.js")).CONFIG; } catch { return; }
+  if (!cfg?.api || !cfg.firebase?.apiKey) return;   // empty placeholders: no sign-in UI at all
+  API = cfg.api.replace(/\/$/, "");
+  const V = "https://www.gstatic.com/firebasejs/11.0.2/";
+  const [{ initializeApp }, mod] = await Promise.all([import(V + "firebase-app.js"), import(V + "firebase-auth.js")]);
+  auth = { mod, auth: mod.getAuth(initializeApp(cfg.firebase)) };
+  mod.onAuthStateChanged(auth.auth, async (u) => { fbUser = u; showAuth(); if (u) await refreshMe(); else reviewsLeft = null; showExplain(); });
+}
+initAuth().catch(() => {});
+
+// text version of the cycle table, same cells the page shows
+function cexText(cex) {
+  const n = Math.min(cex.cycles - 1, cex.first + 2), cols = [...Array(n + 1).keys()];
+  const row = (name, vals) => name + ": " + cols.map((c) => vals[c] ?? "").join(" ");
+  return `cycle: ${cols.join(" ")}\n` + [...cex.inputs.map((i) => row(i.name, i.values)),
+    ...cex.outputs.flatMap((o) => [row(o.name + " expected", o.expected), row(o.name + " yours", o.got)])].join("\n");
+}
+let lastFail = null;   // set when a grade fails; the button below uses it
+function offerExplain(p, code, cex) { lastFail = { p, code, cex }; showExplain(); }
+function showExplain() {
+  const slot = $("explain");
+  if (!slot) return;
+  if (!fbUser || !lastFail || lastFail.p !== current) { slot.innerHTML = ""; return; }
+  const left = reviewsLeft ?? 0;
+  slot.innerHTML = `<p class="actions"><button id="explainBtn" ${left ? "" : "disabled"}>Explain this failure (${left} of 2 free left)</button></p><div id="hintOut"></div>`;
+  $("explainBtn").onclick = async () => {
+    const { p, code, cex } = lastFail, out = $("hintOut"), btn = $("explainBtn");
+    btn.disabled = true; out.innerHTML = `<p class="muted">Reading your failure…</p>`;
+    const tmp = document.createElement("div"); tmp.innerHTML = p.statement;
+    try {
+      const r = await api("/review", { problemId: p.id, problemText: tmp.textContent.trim().slice(0, 6000), userRtl: code.slice(0, 8000), cycleTable: cexText(cex) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Something went wrong.");
+      reviewsLeft = j.reviews_left;
+      out.innerHTML = `<div class="hintline"><b>Hint.</b> ${esc(j.hint).replace(/\n/g, "<br>")}</div>`;
+    } catch (e) { out.innerHTML = `<div class="banner bad">${esc(e.message)}</div>`; await refreshMe(); }
+    btn.textContent = `Explain this failure (${reviewsLeft ?? 0} of 2 free left)`; btn.disabled = !reviewsLeft;
+  };
+}
