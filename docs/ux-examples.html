@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nishkam UX baseline v1 - examples</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#1430ff; --blue-text:#4a63ff; --bg:#000; --panel:#1c1c1e; --ink:#fff; --muted:#a1a1a6;
+  --line:rgba(255,255,255,.16); --ok:#5fd39a; --bad:#ff8a80; --warn:#e8b85a;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;--s8:64px;
+  --r1:6px;--r2:12px;--r3:16px;--pill:999px;
+  --dur:200ms;
+  --font:"Helvetica Neue",Inter,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--font)}
+.rm *,.rm *::before,.rm *::after{transition:none!important;animation:none!important}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
+:focus-visible{outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 4px var(--blue)}
+a{color:var(--blue-text)}
+h1{font-size:32px;line-height:1.15;margin:0 0 var(--s3)}
+h2{font-size:24px;margin:0 0 var(--s4)}
+h3{font-size:16px;margin:var(--s5) 0 var(--s2)}
+code{background:var(--panel);padding:1px 6px;border-radius:var(--r1);font-size:14px}
+.wrap{display:grid;grid-template-columns:200px minmax(0,1fr);gap:var(--s6);max-width:1280px;margin:0 auto;padding:var(--s5) var(--s4)}
+nav.idx{position:sticky;top:var(--s4);align-self:start;display:flex;flex-direction:column;gap:var(--s1)}
+nav.idx b{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:var(--s2)}
+nav.idx a{color:var(--ink);text-decoration:none;padding:6px 12px;border-radius:var(--pill);font-size:14px;min-height:30px;display:flex;align-items:center}
+nav.idx a:hover,nav.idx a[aria-current]{background:var(--blue)}
+section{margin-bottom:var(--s8);scroll-margin-top:var(--s4)}
+.lead{color:var(--muted);max-width:68ch}
+.ex{margin:var(--s5) 0}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:var(--r3);padding:var(--s4);min-width:0;position:relative}
+.box.bad{border-color:rgba(255,138,128,.45)}
+.box.good{border-color:rgba(95,211,154,.5)}
+.lab{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:var(--s3)}
+.bad>.lab{color:var(--bad)}.good>.lab{color:var(--ok)}
+.cap{margin:var(--s2) 0 0;font-size:14px;color:var(--muted)}
+.cap b{color:var(--ink)}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:var(--pill);padding:0 8px;margin-left:4px;white-space:nowrap}
+/* components */
+.btn{font:inherit;font-size:14px;height:30px;padding:0 12px;border-radius:var(--pill);border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:rgba(255,255,255,.16)}
+.btn.pri{background:var(--blue);border-color:var(--blue)}
+.btn.pri:hover{background:#2a43ff}
+.btn.danger{background:#7a1f1a;border-color:#a32c25}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.glass{background:rgba(255,255,255,.07);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.2);border-radius:var(--r3)}
+.card{padding:var(--s5)}
+.stat{padding:var(--s4) var(--s5);display:inline-block;min-width:140px}
+.stat b{display:block;font-size:32px;line-height:1.1}
+.stat span{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.badge{font-size:12px;padding:2px 10px;border-radius:var(--pill);border:1px solid var(--line);display:inline-flex;align-items:center;gap:4px}
+.badge.lit{background:var(--blue);border-color:var(--blue)}
+.badge.lock{color:var(--muted)}
+.mpanel{background:#1c1c1e;border:1px solid var(--line);border-radius:var(--r2);padding:var(--s2);min-width:200px;box-shadow:0 12px 32px rgba(0,0,0,.6)}
+.mpanel .who{padding:var(--s2) var(--s3);font-size:14px}.mpanel .who small{display:block;color:var(--muted)}
+.mpanel [role=menuitem]{display:flex;width:100%;text-align:left;font:inherit;font-size:14px;color:#fff;background:none;border:0;border-radius:var(--r1);padding:0 var(--s3);min-height:30px;align-items:center;cursor:pointer;text-decoration:none}
+.mpanel [role=menuitem]:hover,.mpanel [role=menuitem]:focus{background:var(--blue)}
+.mpanel hr{border:0;border-top:1px solid var(--line);margin:var(--s2) 0}
+/* top bars */
+.bar{display:flex;align-items:center;gap:var(--s3);background:#0a0a0a;border:1px solid var(--line);border-radius:var(--r2);padding:var(--s2) var(--s3);position:relative;min-height:48px}
+.bar.old{flex-wrap:wrap}
+.logo{font-weight:700;letter-spacing:.14em;font-size:14px;display:flex;align-items:center;gap:8px;color:#fff;text-decoration:none;margin-right:auto}
+.logo i{width:20px;height:20px;background:var(--blue);border-radius:6px;display:inline-block}
+.pts{font-size:14px;color:#fff;white-space:nowrap}
+.tagline{font-size:12px;color:var(--muted)}
+.loose{font-size:12px;color:var(--warn)}
+.acct{position:relative}
+.drop{position:absolute;right:0;top:calc(100% + 8px);z-index:5;opacity:0;transform:translateY(-4px);visibility:hidden;pointer-events:none;transition:opacity var(--dur) ease-out,transform var(--dur) ease-out,visibility 0s linear var(--dur)}
+.drop.open{opacity:1;transform:none;visibility:visible;pointer-events:auto;transition:opacity var(--dur) ease-out,transform var(--dur) ease-out}
+.drop.bouncy{transition:opacity 600ms cubic-bezier(.3,1.9,.5,.8),transform 600ms cubic-bezier(.3,1.9,.5,.8),visibility 0s linear 600ms;transform:translateY(-30px) scale(.6)}
+.drop.bouncy.open{transform:none;transition:opacity 600ms cubic-bezier(.3,1.9,.5,.8),transform 600ms cubic-bezier(.3,1.9,.5,.8)}
+.oldmenu{display:none;flex-basis:100%;border-top:1px solid var(--line);padding-top:var(--s2)}
+.oldmenu.open{display:block}
+.read{font-size:12px;color:var(--muted);margin-top:var(--s2);font-variant-numeric:tabular-nums}
+.read b{color:var(--ok)}.read b.x{color:var(--bad)}
+/* skeleton / progress */
+.sk{height:14px;border-radius:var(--r1);background:#2c2c2e;margin:8px 0;animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.4}}
+.prog{height:8px;background:#2c2c2e;border-radius:var(--pill);overflow:hidden;margin:var(--s2) 0}
+.prog i{display:block;height:100%;width:100%;background:var(--blue-text);transform-origin:left;transform:scaleX(0);transition:transform 150ms ease-out}
+.steps{list-style:none;margin:var(--s3) 0 0;padding:0;font-size:14px}
+.steps li{display:flex;gap:8px;padding:2px 0;color:var(--muted)}
+.steps li.on{color:#fff}.steps li.done{color:var(--ok)}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase}
+td.diff{color:var(--bad)}
+.tscroll{overflow-x:auto}
+.banner{border-radius:var(--r2);padding:var(--s4) var(--s5);margin-bottom:var(--s3);display:flex;gap:var(--s4);align-items:center;flex-wrap:wrap}
+.banner.pass{background:#12301f;border:1px solid var(--ok)}
+.banner.fail{background:#35171a;border:1px solid var(--bad)}
+.banner h4{margin:0;font-size:24px;line-height:1.2}
+.banner p{margin:0;font-size:14px;color:#e5e5ea}
+.state{text-align:center;padding:var(--s5) var(--s3)}
+.state p{margin:0 0 var(--s3);font-size:14px}.state strong{display:block;font-size:16px;margin-bottom:4px}
+.err{border:1px solid var(--bad);border-radius:var(--r2);padding:var(--s3) var(--s4);background:#2a1514}
+/* studio */
+.stages{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0}
+.stg{display:flex;align-items:center;gap:6px;font-size:14px;padding:4px 12px;border:1px solid var(--line);border-radius:var(--pill)}
+.dot{width:10px;height:10px;border-radius:50%;background:#636366;display:inline-block}
+.stg.run .dot{background:var(--blue-text);animation:pulse 1s infinite}
+.stg.ok .dot{background:var(--ok)}.stg.fail .dot{background:var(--bad)}
+.stg.fail{border-color:var(--bad)}
+.log{background:#000;border:1px solid var(--line);border-radius:var(--r2);font:13px/1.5 ui-monospace,Consolas,monospace;padding:var(--s3);max-height:0;overflow:auto;opacity:0;transition:max-height 300ms ease-out,opacity 200ms ease-out;padding-block:0;border-width:0}
+.log.open{max-height:160px;opacity:1;padding-block:var(--s3);border-width:1px}
+.log .e{color:var(--bad)}
+details.logd summary{cursor:pointer;font-size:14px;color:var(--muted)}
+/* swatches */
+.sw{display:flex;align-items:flex-end;gap:var(--s2);flex-wrap:wrap}
+.sw div{background:var(--blue);min-width:4px;border-radius:2px}
+.sw span{display:flex;flex-direction:column;align-items:center;font-size:12px;color:var(--muted);gap:4px}
+.ty{display:flex;flex-direction:column;gap:2px}
+.ty div{display:flex;align-items:baseline;gap:var(--s3);line-height:1.25}.ty small{color:var(--muted);font-size:12px;width:40px;flex:none}
+.rad{display:flex;gap:var(--s4)}.rad div{width:64px;height:48px;border:2px solid var(--blue-text);display:flex;align-items:center;justify-content:center;font-size:12px}
+.comp{display:flex;flex-wrap:wrap;gap:var(--s4);align-items:flex-start}
+/* contrast */
+.ct{width:100%}
+.ct td{vertical-align:middle}
+.ct .smp{padding:6px 12px;border-radius:var(--r1);display:inline-block;font-size:16px}
+.res{font-weight:700;white-space:nowrap}
+.res.p{color:var(--ok)}.res.f{color:var(--bad)}
+/* targets */
+.tgt{display:flex;gap:var(--s5);align-items:center;flex-wrap:wrap}
+.ib{border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;border-radius:var(--r1);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font:inherit}
+.ib:hover{background:rgba(255,255,255,.2)}
+.ib.s16{width:16px;height:16px;font-size:10px}.ib.s30{width:30px;height:30px}.ib.s44{width:44px;height:44px;border-radius:var(--r2)}
+.tgt figure{margin:0;text-align:center;font-size:12px;color:var(--muted)}
+/* phone */
+.phone{width:390px;max-width:100%;border:8px solid #2c2c2e;border-radius:28px;background:#000;padding:var(--s3);margin:0 auto}
+.phone .bar{padding:var(--s2) var(--s3)}
+.phone .btn.big{height:44px}
+.sq .btn{white-space:normal;height:auto;text-align:center;line-height:1.2;padding:4px 8px;font-size:12px}
+.sq .tagline{width:100%}
+/* gate */
+.gate{list-style:none;padding:0;margin:0;display:grid;gap:var(--s2)}
+.gate label{display:flex;gap:12px;align-items:flex-start;padding:var(--s3) var(--s4);border:1px solid var(--line);border-radius:var(--r2);background:var(--panel);cursor:pointer;min-height:44px}
+.gate input{width:20px;height:20px;accent-color:var(--blue);flex:none;margin-top:2px}
+.gate input:checked+span{color:var(--muted);text-decoration:line-through}
+.gate small{display:block;color:var(--muted);text-decoration:none}
+.meter{font-size:14px;margin:var(--s3) 0;font-weight:700}
+.tgl{display:flex;gap:8px;align-items:center;font-size:14px;margin:0 0 var(--s3);min-height:30px}
+.tgl input{width:20px;height:20px;accent-color:var(--blue)}
+.code{font:13px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+@media (max-width:900px){
+  .wrap{grid-template-columns:minmax(0,1fr);gap:var(--s4)}
+  nav.idx{position:static;flex-direction:row;flex-wrap:wrap}
+  nav.idx b{width:100%;margin:0}
+  nav.idx a{min-height:44px;border:1px solid var(--line)}
+  .pair{grid-template-columns:minmax(0,1fr)}
+  h1{font-size:24px}
+  .btn,.mpanel [role=menuitem]{min-height:44px}.btn{height:44px}
+  .sq .btn{height:auto;min-height:0}
+  .bar .btn{padding:0 12px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="idx" aria-label="Sections">
+  <b>Sections</b>
+  <a href="#s1">1 Purpose</a><a href="#s2">2 Navigation</a><a href="#s3">3 Feedback</a><a href="#s4">4 Visual system</a><a href="#s5">5 Motion</a><a href="#s6">6 Touch, keys, phones</a><a href="#s7">7 Done-gate</a>
+</nav>
+<main>
+<header>
+  <h1>Nishkam UX baseline v1: look before you approve</h1>
+  <p class="lead">Every example is live. Red "Don't" is what we had; green "Do" is the v1 rule. Tags: <span class="tag">[ours]</span> our decision, <span class="tag">[std]</span> a published standard, <span class="tag">[pattern]</span> what the best products do, <span class="tag">[choice]</span> our pick.</p>
+  <label class="tgl"><input type="checkbox" id="rmToggle"> Reduce motion (demos on this page; also follows your system setting)</label>
+</header>
+
+<!-- 1 -->
+<section id="s1"><h2>1. Purpose</h2>
+<div class="ex"><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri">Submit</button><button class="btn pri">Save draft</button><button class="btn pri">Reset</button><button class="btn pri">Hints</button></div>
+  <p class="tagline" style="margin-top:12px">Practice digital IC design, your way, every day!</p></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri">Submit</button><button class="btn">Save draft</button><button class="btn">Reset</button><button class="btn">Hints</button></div></div>
+</div><p class="cap"><b>#1, #2</b><span class="tag">[ours]</span><span class="tag">[pattern]</span> One main action looks primary, the rest are quiet. Labels say what happens. No slogans on working screens.</p></div>
+<div class="ex"><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span><p style="margin:0">Checking your design with the reference&hellip; (nothing moves, nothing tells you it is alive)</p></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span><p style="margin:0" role="status">Checking cycle 7 of 20&hellip;</p><div class="prog"><i style="transform:scaleX(.35)"></i></div></div>
+</div><p class="cap"><b>#3</b><span class="tag">[std: NN/g #1]</span> Always show the system's status. See section 3 for the full loop.</p></div>
+</section>
+
+<!-- 2 -->
+<section id="s2"><h2>2. Navigation</h2>
+<div class="ex"><h3>Top bar and account menu (#4, #5, #6, #7, #8)</h3>
+<div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't: what we had</span>
+  <div class="bar old" id="oldbar">
+    <a class="logo" href="#s2"><i></i>NISHKAM</a>
+    <span class="tagline">Practice chip design, from RTL to layout</span>
+    <span class="pts">1,240 pts</span>
+    <span class="loose">Studio needs an access key</span>
+    <button class="btn">Open Studio</button>
+    <button class="btn">Runner</button>
+    <button class="btn" id="oldBtn" aria-expanded="false">Profile</button>
+    <div class="oldmenu" id="oldMenu"><div class="who">Yashvardhan Singh <small>@yashv373</small></div><button class="btn" style="width:100%;margin-top:4px">My profile</button><button class="btn" style="width:100%;margin-top:4px">Sign out</button></div>
+  </div>
+  <div class="read">Bar height: <b class="x" id="oldH">-</b> (click Profile: the bar grows and everything below is pushed)</div></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span>
+  <div class="bar" id="newbar">
+    <a class="logo" href="#s2"><i></i>NISHKAM</a>
+    <span class="pts">1,240 pts</span>
+    <button class="btn" title="Studio needs an access key. Ask us for one.">Open Studio</button>
+    <button class="btn">Local runner</button>
+    <div class="acct">
+      <button class="btn" id="acBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="acMenu">Account &#9662;</button>
+      <div class="drop mpanel" id="acMenu" role="menu" aria-label="Account">
+        <div class="who">Yashvardhan Singh<small>@yashv373</small></div><hr>
+        <a role="menuitem" tabindex="-1" href="#s2">My profile</a>
+        <a role="menuitem" tabindex="-1" href="#s2">Admin panel</a>
+        <button role="menuitem" tabindex="-1">Sign out</button>
+      </div>
+    </div>
+  </div>
+  <div class="read">Bar height: <b id="newH">-</b> (menu floats over content; nothing moves). Keys: Enter / Space / &darr; open, arrows move, Esc closes, click outside closes. Hover Open Studio for the key note.</div></div>
+</div>
+<p class="cap"><b>#4-#8</b><span class="tag">[ours]</span><span class="tag">[pattern]</span><span class="tag">[std: APG]</span> One bar everywhere, fixed order, account menu last. Opening never moves content. The access-key note lives in a tooltip, not loose text.</p></div>
+</section>
+
+<!-- 3 -->
+<section id="s3"><h2>3. Feedback</h2>
+<div class="ex"><h3>Loading states (#9, #13)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span><p style="margin:0">Loading&hellip;</p></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span><div aria-busy="true" aria-label="Loading problem"><div class="sk" style="width:60%;height:20px"></div><div class="sk"></div><div class="sk" style="width:90%"></div><div class="sk" style="width:40%"></div></div></div>
+</div><p class="cap"><b>#13</b><span class="tag">[std: NN/g #9]</span> A skeleton shows the shape of what is coming. Never a bare "Loading&hellip;".</p></div>
+
+<div class="ex"><h3>Grading: silent vs steps (#9, #10)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span><button class="btn pri" data-grade="bad">Submit</button><p id="gbad" class="cap" role="status"></p></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span><button class="btn pri" data-grade="good">Submit</button>
+  <div id="ggood" role="status" aria-live="polite" style="display:none">
+   <div class="prog" aria-hidden="true"><i id="gbar"></i></div>
+   <ul class="steps"><li id="gs1">&#9675; Download engine <span id="gpct"></span></li><li id="gs2">&#9675; Check cycles <span id="gcyc"></span></li><li id="gs3">&#9675; Compare with reference</li></ul>
+   <button class="btn" id="gstop" style="margin-top:8px">Stop</button></div></div>
+</div><p class="cap"><b>#9, #10</b><span class="tag">[std: NN/g response times]</span><span class="tag">[pattern]</span> Over 1 s show progress; over 10 s show what is happening and offer Stop. Click Submit on both.</p></div>
+
+<div class="ex"><h3>The result (#11, #12)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span>
+  <div class="tscroll"><table><tr><th>cycle</th><th>in</th><th>out</th><th>ref</th></tr><tr><td>1</td><td>0</td><td>0</td><td>0</td></tr><tr><td>2</td><td>1</td><td>1</td><td>1</td></tr><tr><td>3</td><td>1</td><td class="diff">0</td><td>1</td></tr></table></div></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span>
+  <div class="banner fail" role="status"><div><h4>&#10007; Not equal at cycle 3</h4><p>Checked 20 cycles against the reference for shreg4.</p></div></div>
+  <div class="tscroll"><table><tr><th>cycle</th><th>in</th><th>out</th><th>ref</th></tr><tr><td>1</td><td>0</td><td>0</td><td>0</td></tr><tr><td>2</td><td>1</td><td>1</td><td>1</td></tr><tr><td>3</td><td>1</td><td class="diff">0</td><td>1</td></tr></table></div>
+  <div class="banner pass" style="margin-top:16px"><div><h4>&#10003; Passed</h4><p>Equal for all 20 cycles. +30 points, rank 41 &rarr; 38.</p></div><button class="btn pri" style="margin-left:auto">Next problem</button></div></div>
+</div><p class="cap"><b>#11, #12</b><span class="tag">[pattern]</span> Big pass/fail first, then details, then the next step (fail banner shown on top, pass banner with Next problem below).</p></div>
+
+<div class="ex"><h3>Empty and error states (#13)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span><p style="margin:0 0 12px">No data.</p><p style="margin:0;font-family:ui-monospace,Consolas,monospace;font-size:13px;color:var(--bad)">TypeError: Failed to fetch</p></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span>
+  <div class="state"><strong>No submissions yet</strong><p>Your passed problems show up here.</p><button class="btn pri">Start with shreg4</button></div>
+  <div class="err" role="alert"><strong>Could not load the checking engine.</strong><p style="margin:4px 0 12px;font-size:14px">The 70 MB download stopped. Check your connection.</p><button class="btn pri">Try again</button></div></div>
+</div><p class="cap"><b>#13</b><span class="tag">[std: NN/g #9]</span> Empty says why and what to do. Error says what failed and what to do next.</p></div>
+
+<div class="ex"><h3>Studio run (#14)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn">Lint</button><button class="btn">Sim</button><button class="btn">Synth</button><button class="btn">Place</button><button class="btn">Route</button><button class="btn">Stop</button></div>
+  <p class="cap">Seven buttons, no status, log hidden somewhere (open it yourself):</p><details class="logd"><summary>Log</summary><div class="log open code" style="margin-top:8px">...</div></details></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span>
+  <button class="btn pri" id="runBtn" aria-pressed="false">&#9654; Run</button> <span class="cap" id="runMsg" role="status"></span>
+  <div class="stages" id="stages"></div>
+  <div class="log code" id="runLog" role="log" tabindex="0" aria-label="Run log"></div></div>
+</div><p class="cap"><b>#14</b><span class="tag">[pattern]</span> One Run button that becomes Stop. A dot per stage (with a word, not colour alone). The log opens by itself when a stage fails. Click Run: route fails on purpose.</p></div>
+</section>
+
+<!-- 4 -->
+<section id="s4"><h2>4. Visual system</h2>
+<div class="ex"><h3>Tokens (#15)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span><div class="code">.card { color:#5b78ff;
+  padding:13px 19px;
+  font-size:15px; }</div></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span><div class="code">/* web/tokens.css */
+.card { color:var(--ink);
+  padding:var(--s5);
+  font-size:var(--t-14); }</div></div>
+</div><p class="cap"><b>#15</b><span class="tag">[std: Design Tokens CG]</span><span class="tag">[choice]</span> One tokens file. Pages use variables, never raw hex or off-scale px. (This page itself is built from the same tokens.)</p></div>
+
+<div class="ex"><h3>Scales (#16)</h3><div class="pair">
+ <div class="box"><span class="lab" style="color:var(--muted)">Spacing (px)</span><div class="sw" id="spSw"></div>
+ <span class="lab" style="color:var(--muted);margin-top:16px">Radius</span><div class="rad"><div style="border-radius:6px">6</div><div style="border-radius:12px">12</div><div style="border-radius:16px">16</div><div style="border-radius:999px">pill</div></div></div>
+ <div class="box"><span class="lab" style="color:var(--muted)">Type (px)</span><div class="ty" id="tySc"></div></div>
+</div><p class="cap"><b>#16</b><span class="tag">[choice]</span> Spacing 4-8-12-16-24-32-48-64. Type 12-14-16-20-24-32-48. Anything else is off-scale.</p></div>
+
+<div class="ex"><h3>Component set (#17)</h3>
+<div class="box"><div class="comp">
+ <div><span class="lab" style="color:var(--muted)">Pill buttons</span><div style="display:flex;gap:8px"><button class="btn pri">Submit</button><button class="btn">Cancel</button></div></div>
+ <div><span class="lab" style="color:var(--muted)">Badge</span><div style="display:flex;gap:8px"><span class="badge lit">&#10003; Solved</span><span class="badge lock">&#128274; Locked</span></div></div>
+ <div><span class="lab" style="color:var(--muted)">Stat card</span><div class="glass stat"><b>1,240</b><span>Points</span></div></div>
+ <div style="min-width:220px;flex:1"><span class="lab" style="color:var(--muted)">Card (glass, 24px)</span><div class="glass card"><b>shreg4</b><br><span style="color:var(--muted);font-size:14px">4-bit shift register. Easy.</span></div></div>
+ <div><span class="lab" style="color:var(--muted)">Menu panel</span><div class="mpanel" role="presentation"><div class="who">Yashvardhan Singh<small>@yashv373</small></div><hr><button class="btn" style="width:100%;border:0;background:none;justify-content:flex-start">My profile</button></div></div>
+</div></div>
+<p class="cap"><b>#17</b><span class="tag">[ours]</span> Reuse these. No one-off styles. Pill 30px tall, glass blur 28px / saturate 180%, card padding 24px.</p></div>
+
+<div class="ex"><h3>Colour contrast (#18)</h3>
+<div class="box"><div class="tscroll"><table class="ct" id="ct">
+ <tr><th>Sample</th><th>Colours</th><th>Ratio</th><th>Verdict</th></tr>
+</table></div></div>
+<p class="cap"><b>#18</b><span class="tag">[std: WCAG 1.4.3 / 1.4.11]</span> Ratios are computed in this page with the WCAG formula. #1430ff is for fills only. #4a63ff is for text on pure black. On panels, blue text is large-only; otherwise white.</p></div>
+</section>
+
+<!-- 5 -->
+<section id="s5"><h2>5. Motion</h2>
+<div class="ex"><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't: 600 ms, bouncy</span>
+  <div class="acct" style="height:150px"><button class="btn" data-mdemo aria-haspopup="menu" aria-expanded="false">Account &#9662;</button>
+  <div class="drop bouncy mpanel" role="menu" style="right:auto;left:0"><a role="menuitem" tabindex="-1" href="#s5">My profile</a><button role="menuitem" tabindex="-1">Sign out</button></div></div></div>
+ <div class="box good"><span class="lab">&#10003; Do: 200 ms, ease-out, opacity + transform</span>
+  <div class="acct" style="height:150px"><button class="btn" data-mdemo aria-haspopup="menu" aria-expanded="false">Account &#9662;</button>
+  <div class="drop mpanel" role="menu" style="right:auto;left:0"><a role="menuitem" tabindex="-1" href="#s5">My profile</a><button role="menuitem" tabindex="-1">Sign out</button></div></div></div>
+</div><p class="cap"><b>#19</b><span class="tag">[std: Material motion]</span> Hover 100-150 ms, menus 200-250 ms, panels 300 ms at most. Animate only transform and opacity. Toggle "Reduce motion" at the top: both menus snap open and the skeletons stop pulsing.</p></div>
+<div class="ex"><p class="cap"><b>#20</b><span class="tag">[std: WCAG]</span><span class="tag">[ours]</span> All motion off under <code>prefers-reduced-motion</code>. On working screens motion only explains a change; showpiece effects belong on the landing page. This page obeys it (try the toggle).</p></div>
+</section>
+
+<!-- 6 -->
+<section id="s6"><h2>6. Touch, keyboard and phones</h2>
+<div class="ex"><h3>Target size (#21)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span><div class="tgt"><figure><button class="ib s16" aria-label="Close">&#10005;</button><br>16 px</figure></div></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span><div class="tgt"><figure><button class="ib s30" aria-label="Close">&#10005;</button><br>30 px desktop</figure><figure><button class="ib s44" aria-label="Close">&#10005;</button><br>44 px phone</figure></div></div>
+</div><p class="cap"><b>#21</b><span class="tag">[std: WCAG 2.5.8]</span><span class="tag">[choice]</span> Minimum 24&times;24 by the standard; we use 30 on desktop and 44 on phones.</p></div>
+
+<div class="ex"><h3>Keyboard and focus (#22)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't</span><div tabindex="-1" style="display:inline-block;background:var(--blue);padding:4px 12px;border-radius:999px;cursor:pointer;outline:none">Submit (a div, no focus ring)</div></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span><button class="btn pri">Submit</button> <button class="ib s30" aria-label="Settings">&#9881;</button><p class="cap">Press Tab: real buttons, visible ring, icon button has a label.</p></div>
+</div><p class="cap"><b>#22</b><span class="tag">[std]</span> Everything works by keyboard. Real buttons and links. Icon-only controls have a label.</p></div>
+
+<div class="ex"><h3>Phone, 390 px (#23)</h3><div class="pair">
+ <div class="box bad"><span class="lab">&#10007; Don't: squeezed</span>
+  <div class="phone"><div class="bar old sq"><a class="logo" href="#s6"><i></i>NISHKAM</a><span class="tagline">Practice chip design, RTL to layout</span><span class="pts">1,240 pts</span><button class="btn">Open Studio</button><button class="btn">Local runner</button><button class="btn">My profile</button></div></div></div>
+ <div class="box good"><span class="lab">&#10003; Do (v1)</span>
+  <div class="phone"><div class="bar"><a class="logo" href="#s6"><i></i>NISHKAM</a><span class="pts">1,240 pts</span><button class="btn big" aria-label="Account" style="min-width:44px;padding:0 12px">&#9786; &#9662;</button></div>
+  <p class="cap" style="padding:0 4px">Studio and runner are hidden here, not squeezed. No wrapped text, no sideways scroll.</p></div></div>
+</div><p class="cap"><b>#23</b><span class="tag">[ours]</span> Under 700 px show only what works on a phone: logo, points, account.</p></div>
+</section>
+
+<!-- 7 -->
+<section id="s7"><h2>7. Done-gate before any push to web/</h2>
+<div class="box"><ul class="gate" id="gate">
+ <li><label><input type="checkbox"><span>Agent brief began with "Read docs/UX.md. It is binding." <small>#24 [ours]</small></span></label></li>
+ <li><label><input type="checkbox"><span>Screenshots of every touched state: signed out / in / admin x 1440 / 390, plus menu-open, empty, error <small>#25 [ours] [std: Playwright]</small></span></label></li>
+ <li><label><input type="checkbox"><span>Opus looked at the screenshots, not only the agent that built them <small>#25 [ours]</small></span></label></li>
+ <li><label><input type="checkbox"><span>No layout shift on open, no sideways scroll, no console errors <small>#26 [std]</small></span></label></li>
+ <li><label><input type="checkbox"><span>axe-core: no serious or critical issues <small>#26 [std: axe impact levels]</small></span></label></li>
+ <li><label><input type="checkbox"><span>After deploy: live page loaded, console checked <small>#27 [ours]</small></span></label></li>
+ <li><label><input type="checkbox"><span>Report lists the checks that did not run; unchecked does not ship <small>#28 [ours]</small></span></label></li>
+ <li><label><input type="checkbox"><span>Big flows: 5 real users, track success, time, SUS (68 = average) <small>#29 [std: NN/g, MeasuringU]</small></span></label></li>
+</ul><div class="meter" id="gateMeter" role="status"></div></div>
+<p class="cap">Tick them to see the gate. A push needs every box ticked or an honest "did not run" note.</p>
+</section>
+</main>
+</div>
+
+<script>
+(function(){
+var $=function(s,r){return (r||document).querySelector(s)}, $$=function(s,r){return [].slice.call((r||document).querySelectorAll(s))};
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+
+/* reduced motion toggle */
+$('#rmToggle').addEventListener('change',function(e){document.documentElement.classList.toggle('rm',e.target.checked)});
+
+/* generic APG menu button */
+function menuButton(btn,panel){
+  var items=function(){return $$('[role=menuitem]',panel)};
+  function open(focusIdx){btn.setAttribute('aria-expanded','true');panel.classList.add('open');
+    if(focusIdx!=null){var it=items();it.forEach(function(i){i.tabIndex=-1});var t=it[(focusIdx+it.length)%it.length];t.tabIndex=0;t.focus({preventScroll:true})}}
+  function close(ret){btn.setAttribute('aria-expanded','false');panel.classList.remove('open');if(ret)btn.focus()}
+  btn.addEventListener('click',function(){btn.getAttribute('aria-expanded')==='true'?close():open(0)});
+  btn.addEventListener('keydown',function(e){
+    if(e.key==='ArrowDown'||e.key==='Enter'||e.key===' '){e.preventDefault();open(0)}
+    else if(e.key==='ArrowUp'){e.preventDefault();open(-1)}});
+  panel.addEventListener('keydown',function(e){
+    var it=items(),i=it.indexOf(document.activeElement);
+    if(e.key==='ArrowDown'){e.preventDefault();open(i+1)}
+    else if(e.key==='ArrowUp'){e.preventDefault();open(i-1)}
+    else if(e.key==='Home'){e.preventDefault();open(0)}
+    else if(e.key==='End'){e.preventDefault();open(-1)}
+    else if(e.key==='Escape'){e.preventDefault();close(true)}
+    else if(e.key==='Tab'){close(false)}});
+  panel.addEventListener('click',function(e){if(e.target.closest('[role=menuitem]')){e.preventDefault();close(true)}});
+  document.addEventListener('click',function(e){if(!panel.contains(e.target)&&!btn.contains(e.target))close(false)});
+}
+menuButton($('#acBtn'),$('#acMenu'));
+$$('[data-mdemo]').forEach(function(b){menuButton(b,b.nextElementSibling)});
+
+/* bar height readouts */
+function H(){$('#oldH').textContent=$('#oldbar').offsetHeight+' px';$('#newH').textContent=$('#newbar').offsetHeight+' px'}
+$('#oldBtn').addEventListener('click',function(){var m=$('#oldMenu'),o=m.classList.toggle('open');this.setAttribute('aria-expanded',o);requestAnimationFrame(H)});
+var acObs=new MutationObserver(H);acObs.observe($('#acBtn'),{attributes:true});
+window.addEventListener('resize',H);H();
+
+/* grading */
+var gtoken=0;
+$$('[data-grade]').forEach(function(b){b.addEventListener('click',function(){
+  if(b.dataset.grade==='bad'){var m=$('#gbad');m.textContent='';b.disabled=true;sleep(3500).then(function(){b.disabled=false;m.textContent='Not equal.'})}
+  else good(b)})});
+async function good(b){
+  var t=++gtoken,box=$('#ggood'),bar=$('#gbar');box.style.display='block';b.disabled=true;
+  var set=function(id,cls,txt){var l=$(id);l.className=cls;l.firstChild.textContent=txt};
+  ['#gs1','#gs2','#gs3'].forEach(function(s,i){set(s,'',['○ Download engine ','○ Check cycles ','○ Compare with reference'][i])});
+  $('#gpct').textContent='';$('#gcyc').textContent='';
+  set('#gs1','on','▶ Download engine ');
+  for(var p=0;p<=100;p+=5){if(t!==gtoken)return;bar.style.transform='scaleX('+p/100+')';$('#gpct').textContent=p+'% of 70 MB';await sleep(60)}
+  set('#gs1','done','✓ Download engine ');
+  set('#gs2','on','▶ Check cycles ');bar.style.transform='scaleX(0)';
+  for(var c=1;c<=20;c++){if(t!==gtoken)return;bar.style.transform='scaleX('+c/20+')';$('#gcyc').textContent=c+' / 20';await sleep(90)}
+  set('#gs2','done','✓ Check cycles ');set('#gs3','on','▶ Compare with reference');await sleep(400);if(t!==gtoken)return;
+  set('#gs3','done','✓ Equal for all 20 cycles');b.disabled=false;$('#gstop').textContent='Done'}
+$('#gstop').addEventListener('click',function(){gtoken++;$('#ggood').style.display='none';$('#gstop').textContent='Stop';$('[data-grade=good]').disabled=false});
+
+/* studio fake run */
+var STG=['Lint','Simulate','Synthesize','Timing','Place','Route','GDS','DRC','LVS'],FAILAT=5;
+var sBox=$('#stages'),sEls=STG.map(function(n){var d=document.createElement('div');d.className='stg';d.innerHTML='<span class="dot"></span><span class="n">'+n+'</span><span class="w" style="color:var(--muted);font-size:12px">waiting</span>';sBox.appendChild(d);return d});
+var running=false,runTok=0,runBtn=$('#runBtn'),log=$('#runLog');
+function st(i,c,w){sEls[i].className='stg '+c;$('.w',sEls[i]).textContent=w}
+function say(t,e){var d=document.createElement('div');d.textContent=t;if(e)d.className='e';log.appendChild(d);log.scrollTop=log.scrollHeight}
+runBtn.addEventListener('click',async function(){
+  if(running){runTok++;running=false;runBtn.innerHTML='&#9654; Run';runBtn.setAttribute('aria-pressed','false');$('#runMsg').textContent='Stopped.';sEls.forEach(function(e,i){if(e.classList.contains('run'))st(i,'','stopped')});return}
+  var t=++runTok;running=true;runBtn.innerHTML='&#9632; Stop';runBtn.classList.add('danger');runBtn.setAttribute('aria-pressed','true');
+  log.className='log code';log.innerHTML='';$('#runMsg').textContent='Running tiny8...';
+  sEls.forEach(function(e,i){st(i,'','waiting')});
+  for(var i=0;i<STG.length;i++){
+    st(i,'run','running');say('[ '+STG[i].toLowerCase()+' ] start');await sleep(600);if(t!==runTok)return;
+    if(i===FAILAT){st(i,'fail','failed');say('[ route ] ERROR: 3 nets unrouted (DRT-0073)',true);say('[ route ] stopped.');log.classList.add('open');fin('Failed at '+STG[i]+'. Log opened.');return}
+    st(i,'ok','done');say('[ '+STG[i].toLowerCase()+' ] ok')}
+  fin('All stages done.');
+  function fin(m){running=false;runBtn.classList.remove('danger');runBtn.innerHTML='&#9654; Run again';runBtn.setAttribute('aria-pressed','false');$('#runMsg').textContent=m}
+});
+
+/* swatches */
+var SP=[4,8,12,16,24,32,48,64];
+SP.forEach(function(v){var s=document.createElement('span');s.innerHTML='<div style="width:'+v+'px;height:'+v+'px"></div>'+v;$('#spSw').appendChild(s)});
+[12,14,16,20,24,32,48].forEach(function(v){var d=document.createElement('div');d.innerHTML='<small>'+v+'</small><span style="font-size:'+v+'px">Squeeze tiny8</span>';$('#tySc').appendChild(d)});
+
+/* contrast, WCAG 2.x */
+function lum(h){var c=[1,3,5].map(function(i){var v=parseInt(h.substr(i,2),16)/255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function ratio(a,b){var x=lum(a),y=lum(b),hi=Math.max(x,y),lo=Math.min(x,y);return (hi+.05)/(lo+.05)}
+var CT=[
+ ['#1430ff','#000000','Blue as text (normal)',false,'text'],
+ ['#1430ff','#1c1c1e','Blue as text on panel',false,'text'],
+ ['#ffffff','#1430ff','White text on blue FILL',false,'text'],
+ ['#4a63ff','#000000','Blue-ish text on black',false,'text'],
+ ['#4a63ff','#1c1c1e','On panel, normal text',false,'text'],
+ ['#4a63ff','#1c1c1e','On panel, LARGE text (24px)',true,'text'],
+ ['#ffffff','#1c1c1e','White on panel',false,'text'],
+ ['#a1a1a6','#1c1c1e','Muted on panel',false,'text'],
+ ['#1430ff','#000000','Blue UI part / focus ring (needs 3:1)',false,'ui']];
+CT.forEach(function(r){var q=ratio(r[0],r[1]),need=r[4]==='ui'||r[3]?3:4.5,ok=q>=need,tr=document.createElement('tr');
+ tr.innerHTML='<td><span class="smp" style="color:'+r[0]+';background:'+r[1]+';border:1px solid var(--line);'+(r[3]?'font-size:24px':'')+'">'+r[2]+'</span></td><td><code>'+r[0]+'</code> on <code>'+r[1]+'</code></td><td>'+q.toFixed(2)+' : 1<br><small style="color:var(--muted)">needs '+need+'</small></td><td class="res '+(ok?'p':'f')+'">'+(ok?'✓ pass':'✗ fail')+'</td>';
+ $('#ct').appendChild(tr)});
+
+/* done gate */
+var gate=$$('#gate input');function gm(){var n=gate.filter(function(i){return i.checked}).length;$('#gateMeter').textContent=n===gate.length?'✓ All '+n+' checks done. OK to push.':n+' of '+gate.length+' done. Not ready to push.'}
+gate.forEach(function(i){i.addEventListener('change',gm)});gm();
+
+/* sidebar current section */
+var links=$$('nav.idx a');
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)links.forEach(function(a){a.toggleAttribute('aria-current',a.getAttribute('href')==='#'+e.target.id)})})},{rootMargin:'-20% 0px -70% 0px'});
+$$('section').forEach(function(s){io.observe(s)});
+})();
+</script>
+</body>
+</html>

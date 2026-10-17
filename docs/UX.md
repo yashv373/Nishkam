@@ -1,6 +1,6 @@
 # Nishkam UX baseline v1
 
-Status: **proposed, waiting for the owner's approval.** Once approved, it is binding for every change to web/. If a rule needs to change, change this file first, on purpose.
+Status: **APPROVED by the owner on 2026-10-18. Binding** for every change to web/. Change this file first, on purpose, if a rule needs to change. Visual examples: docs/ux-examples.html.
 
 Built from three inputs: our own draft v0, research on UX methods, and research on comparable products. Each rule is tagged:
 - **[ours]**: from our draft and the owner's own decisions.
