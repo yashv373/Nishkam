@@ -501,8 +501,8 @@ async function localStage(id, io) {
       const l = await (await import("./engines/lvs.js")).run({ ...a, files: { [top + ".spice"]: r.files[top + ".spice"], [top + ".v"]: PD.cts?.[top + "_cts.v"] || need(outputs["netlist.v"], "Synthesis") }, options: { top, timeoutS: opts.pdTimeout } });
       sm.lvs = l.summary; Object.assign(r.files, l.files);
       if (l.summary && l.summary.match === false && r.files[top + ".ext"]) {   // name the router shorts behind the mismatch
-        const { findShorts, shortsMessage } = await import("./engines/shorts.js");
-        try {   // a diagnostic failure must never replace the LVS result
+        try {   // a diagnostic failure (including the import) must never replace the LVS result
+          const { findShorts, shortsMessage } = await import("./engines/shorts.js");
           const sh = findShorts(new TextDecoder().decode(r.files[top + ".ext"]), new TextDecoder().decode(PD.route[top + "_route.def"]));
           sm.lvs.shorts = sh.length; if (sh.length) io.onLog("WARNING: LVS mismatch. " + shortsMessage(sh));
         } catch (e2) { io.onLog("NOTE: could not look for router shorts: " + e2.message); }

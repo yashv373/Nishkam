@@ -29,7 +29,7 @@ for (const n of names) {
     const sh = findShorts(new TextDecoder().decode(mg.files[top + ".ext"]), new TextDecoder().decode(r.rt.files[top + "_route.def"]));
     ok = lv.summary.match === true && sh.length === 0; lvs = `, lvs ${lv.summary.match} devices ${lv.summary.devices} nets ${lv.summary.nets}`;
     if (n === "tiny8") {   // post-route STA on Magic's SPEF (escaped net names once crashed OpenSTA)
-      const st = await S.handle({ files: { [top + ".v"]: r.ct.files[top + "_cts.v"], [top + ".spef"]: mg.files[top + ".spef"] }, options: { top, periodNs: 24, inputDelayNs: 4.8, outputDelayNs: 4.8, loadPf: 0.05, propagated: true } }, { ...io, log() {} });
+      const st = await S.handle({ files: { [top + ".v"]: r.ct ? r.ct.files[top + "_cts.v"] : r.nl, [top + ".spef"]: mg.files[top + ".spef"] }, options: { top, periodNs: 24, inputDelayNs: 4.8, outputDelayNs: 4.8, loadPf: 0.05, propagated: true } }, { ...io, log() {} });
       ok = ok && Number.isFinite(st.summary.setup_ws_ns) && Number.isFinite(st.summary.hold_ws_ns); lvs += `, post-route setup ${st.summary.setup_ws_ns} hold ${st.summary.hold_ws_ns}`;
     }
   }
