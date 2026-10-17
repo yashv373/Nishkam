@@ -73,9 +73,11 @@ textarea{resize:vertical;min-height:96px}
 .sk{border-radius:12px;background:rgba(255,255,255,.08);animation:pulse 1.4s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.4}}
 @media(prefers-reduced-motion:reduce){.sk{animation:none}.ddpanel,.ddtrg svg{transition:none}}
+.logotype { display: inline-block; aspect-ratio: 5033 / 1855; height: 28px; background: #fff; vertical-align: middle;
+  -webkit-mask: url(brand/wordmark-latin.svg) center / contain no-repeat; mask: url(brand/wordmark-latin.svg) center / contain no-repeat; }
 </style></head>
 <body>
-<header class="top"><a class="logo" href="index.html">Nishkam</a><span class="pill" id="pts" hidden></span><a class="pill nophone" href="studio.html">Open Studio</a><span id="auth"></span></header>
+<header class="top"><a class="logo" href="index.html" aria-label="Nishkam home"><span class="logotype"></span></a><span class="pill" id="pts" hidden></span><a class="pill nophone" href="studio.html">Open Studio</a><span id="auth"></span></header>
 <main id="main" class="wrap"></main>
 <script type="module" src="profile.js"></script>
 </body></html>
