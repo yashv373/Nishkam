@@ -239,6 +239,7 @@ function physRows() {
     const dbu = +(((() => { const x = outputs[`browser/place/${p.top}.def`] || ""; return typeof x === "string" ? x : new TextDecoder().decode(x); })().match(/UNITS DISTANCE MICRONS (\d+)/) || [])[1] || 0);
     const d = (p.die.match(/-?\d+/g) || []).map(Number), um = (v) => (dbu ? (v / dbu).toFixed(1) : v);
     rows.push(["Components (cells + fill)", p.components], ["Die", d.length === 4 ? `${um(d[2] - d[0])} x ${um(d[3] - d[1])} ${dbu ? "µm" : "DEF units"}` : "n/a"], ["Placement time", ms(p)]);
+    if (p.fit) rows.push(["LibreLane fit (estimate)", `${Math.round(p.fit.util * 100)}% of the core${p.fit.fail ? ". LibreLane would stop: the die is too small for it (GPL-0301)" : ""}`]);
   }
   if (r) rows.push(["Failed nets", r.failedNets], ["Routing time", ms(r)]);
   if (g) rows.push(["DRC error tiles", g.drcErrors], ["  inside library cells", g.drcInCells], ["  from the layout", g.drcFromLayout], ["GDS size", (g.gdsBytes / 1024).toFixed(1) + " KB"], ["Magic time", ms(g)]);
@@ -498,6 +499,17 @@ async function staRun(key, files, io, propagated = false) {
     return { x, files: { [rd + "max.rpt"]: f["max.rpt"], [rd + "min.rpt"]: f["min.rpt"], [ot + "timing.rpt"]: f["timing.rpt"], [ot + "power.rpt"]: f["power.rpt"], [ot + "constraints.sdc"]: f["constraints.sdc"] } };
   } catch (e) { if (e.name === "AbortError") throw e; x.error = e.message; return { x, files: {} }; }
 }
+// LibreLane fit check (fit.js): cells + taps + port buffers + repair buffers against the core, from the synthesised netlist. Logs the breakdown, warns when LibreLane would fail.
+let lefText = null;
+async function fitNote(dieW, dieH, log) {
+  const nl = outputs["netlist.v"]; if (!nl) return null;
+  try {
+    const F = await import("./fit.js"); lefText ||= await (await fetch(new URL("../vendor/gf180mcu/pd-7b70722/gf180mcu_fd_sc_mcu7t5v0.lef", import.meta.url))).text();
+    const c = F.check(typeof nl === "string" ? nl : new TextDecoder().decode(nl), lefText, dieW, dieH);
+    for (const l of c.lines) log(l);
+    return { util: c.util, gpl: c.gpl, fail: c.fail };
+  } catch (e) { log("NOTE: could not run the LibreLane fit check: " + e.message); return null; }
+}
 async function localStage(id, io) {
   const top = opts.top, need = (v, what) => { if (!v) throw new Error(`Run ${what} first.`); return v; };
   if (id === "floorplan") { io.onLog("Floorplan is part of Placement in the browser flow (the die is sized from the cells). " + NOT_LL); return { ok: true, info: "in placement" }; }
@@ -542,6 +554,11 @@ async function localStage(id, io) {
   }
   if (r.ok) PD[id === "signoff" ? "magic" : id] = id === "cts" ? { [top + ".def"]: r.files[top + ".def"], [top + "_cts.v"]: r.files[top + "_cts.v"] } : r.files;
   if (id === "place") delete PD.cts;   // a new placement makes the old clock tree stale
+  if (id === "place" && r.ok) {   // the browser die ignores the cells LibreLane adds: say how full it would be there (#21)
+    const df = r.files?.[top + ".def"] || "", dt = typeof df === "string" ? df : new TextDecoder().decode(df);
+    const dbu = +((dt.match(/UNITS DISTANCE MICRONS (\d+)/) || [])[1] || 0), d = ((r.summary?.die || "").match(/-?\d+/g) || []).map(Number);
+    if (dbu && d.length === 4) r.summary.fit = await fitNote((d[2] - d[0]) / dbu, (d[3] - d[1]) / dbu, io.onLog);
+  }
   const out = { ...r, files: pre(id, r.files) };
   if (id === "cts") { delete out.files[`browser/cts/${top}_cts.v`]; out.files[`browser/cts/${top}.v`] = r.files[top + "_cts.v"]; }
   if (id === "signoff") {
@@ -582,6 +599,7 @@ $("linkOk").onclick = () => { if (R.connectFromLink($("linkIn").value)) { $("run
 let lastJob = null;   // finished job id; later stages resume its run folder
 async function runnerJob({ from, to, ids }) {
   const body = { top: opts.top, clock_port: opts.clockPort, knobs: knobs(), from, to };
+  if (from === "floorplan") await fitNote(+opts.dieW, +opts.dieH, (l) => cons.log(ids[0], l));
   if (from === "floorplan") body.files = Object.fromEntries(Object.entries(project.all()).filter(([n]) => !project.isTb(n)));
   else if (lastJob) body.resume = lastJob;
   else throw new Error("Run Floorplan first: later stages continue from a finished run.");
