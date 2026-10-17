@@ -20,7 +20,7 @@ else {
       const card = (n, l) => `<div class="card"><b>${esc(n)}</b><span>${esc(l)}</span></div>`;
       const tog = (k, l) => `<div class="row"><button class="${f[k] === "on" ? "on" : ""}" data-k="${k}" data-v="${f[k] === "on" ? "off" : "on"}">${l}: ${f[k]}</button><span class="muted">Click to switch.</span></div>`;
       const pp = Object.entries(s.solves.perProblem).sort((a, b) => b[1] - a[1]).map(([id, n]) => `<tr><td>${esc(id)}</td><td>${n}</td></tr>`).join("");
-      say(`<h2>People</h2><div class="cards">${card(s.users, "accounts")}${card(s.signups.today, "new today")}${card(s.signups.d7, "new, 7 days")}${card(s.signups.d30, "new, 30 days")}${card(s.active7, "active, 7 days")}</div>
+      say(`<h1 style="font-size:clamp(32px,6vw,56px);line-height:1.05;letter-spacing:-.02em;margin:8px 0 4px">Welcome back to Project Nishkam, sir.</h1><p id="first" style="font-size:clamp(20px,3vw,28px);color:var(--accent);margin:0 0 8px"></p><h2>People</h2><div class="cards">${card(s.users, "accounts")}${card(s.signups.today, "new today")}${card(s.signups.d7, "new, 7 days")}${card(s.signups.d30, "new, 30 days")}${card(s.active7, "active, 7 days")}</div>
         <h2>Work</h2><div class="cards">${card(s.solves.total, "solves")}${card(s.reviews.total, "AI explanations used")}${card(s.reviews.today, "AI explanations today")}</div>
         <table>${pp || NONE("No solves yet.")}</table>
         <h2>Switches</h2>${tog("ai_review", "AI explanations")}${tog("signups", "New sign-ups")}${tog("studio", "Practice and Studio")}
@@ -29,6 +29,7 @@ else {
         <h2>Website visits</h2><p><a href="https://dash.cloudflare.com/?to=/:account/web-analytics" target="_blank" rel="noopener">Open Cloudflare Web Analytics</a></p>
         <h2>Last 50 admin actions</h2><table>${s.log.map((l) => `<tr><td>${esc(new Date(l.at).toLocaleString())}</td><td>${esc(l.who)}</td><td>${esc(l.what)}</td></tr>`).join("") || NONE("None yet.")}</table>
         <p id="msg" class="err"></p>`);
+      $("first").textContent = (auth.currentUser.displayName || "").split(" ")[0];
       const set = async (key, value) => { try { await call("/admin/flags", { key, value }); show(); } catch (e) { $("msg").textContent = e.message; } };
       main.querySelectorAll("button[data-k]").forEach((b) => (b.onclick = () => set(b.dataset.k, b.dataset.v)));
       $("deck").onclick = async () => {

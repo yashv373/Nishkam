@@ -320,7 +320,7 @@ function showAuth() {
   const box = $("auth");
   if (fbUser) {
     const img = fbUser.photoURL ? `<img src="${esc(fbUser.photoURL)}" alt="" width="22" height="22" style="border-radius:50%" referrerpolicy="no-referrer">` : `<span aria-hidden="true">●</span>`;
-    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}${me ? ` · ${me.points} point${me.points === 1 ? "" : "s"}` : ""}</span></button>${menuOpen ? `${me?.is_admin ? '<a class="pill" href="admin.html" style="text-decoration:none">Admin</a>' : ""}<button class="pill" id="out">Sign out</button>` : ""}`;
+    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}${me ? ` · ${me.points} point${me.points === 1 ? "" : "s"}` : ""}</span></button>${me?.is_admin ? '<a class="pill" href="admin.html" style="text-decoration:none;background:#1430ff;color:#fff;font-weight:600">Admin</a>' : ""}${menuOpen ? `<button class="pill" id="out">Sign out</button>` : ""}`;
     $("signout").onclick = () => { menuOpen = !menuOpen; showAuth(); };
     if ($("out")) $("out").onclick = () => auth.mod.signOut(auth.auth);
   } else {
@@ -347,6 +347,17 @@ async function refreshMe() {
       return refreshMe();
     }
     showAuth();
+    if (me.is_admin && !sessionStorage.getItem("adminToast")) {
+      sessionStorage.setItem("adminToast", "1");
+      const t = document.createElement("div");
+      t.setAttribute("role", "status");
+      t.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:99999;max-width:320px;padding:14px 16px;border-radius:12px;background:#000;color:#fff;border:1px solid #1430ff;font:14px/1.4 sans-serif;display:flex;gap:12px;align-items:center";
+      const m = document.createElement("span"); m.textContent = "Welcome back to Project Nishkam, sir.";
+      const b = document.createElement("a"); b.href = "admin.html"; b.textContent = "Open admin";
+      b.style.cssText = "background:#1430ff;color:#fff;padding:8px 12px;border-radius:8px;text-decoration:none;white-space:nowrap";
+      t.append(m, b); document.body.appendChild(t);
+      setTimeout(() => t.remove(), 12000);
+    }
   } catch { /* backend unreachable: page works as before */ }
 }
 async function initAuth() {
