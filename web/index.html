@@ -356,6 +356,15 @@ footer::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;po
 @keyframes breathe{50%{opacity:.35;transform:scaleX(.8)}}
 .paused::before,.paused::after,.paused *,.paused .beam::before{animation-play-state:paused!important}
 @media (prefers-reduced-motion:reduce){.lo.reveal,.flowt tbody tr{opacity:1!important;filter:none!important;transform:none!important}.marq div,.scan,.beam,footer::before,.mission.next::before,#what::before,.steps::after{animation:none!important}.marq{overflow-x:auto}}
+
+/* 3D layer stack (CSS 3D, real tiny8 shapes) + card tilt */
+.stkscene{perspective:1500px;height:min(640px,150vw);display:flex;align-items:center;justify-content:center;margin:10px 0 0;overflow:hidden}
+.stk{--s:min(360px,64vw);--e:0;position:relative;width:var(--s);height:var(--s);transform-style:preserve-3d;transform:rotateX(calc(70deg - var(--e)*14deg)) rotateZ(calc(-20deg - var(--e)*28deg)) translateY(calc(var(--e)*18%))}
+.lay{position:absolute;inset:0;transform:translateZ(calc(var(--i)*var(--e)*var(--g,60px)));border:1px solid rgba(120,140,255,.7);background:rgba(8,12,40,.55);box-shadow:0 0 22px rgba(74,99,255,.4),inset 0 0 18px rgba(74,99,255,.25)}
+.lay canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.95}
+.lay span{position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);font:500 12px var(--mono);letter-spacing:.06em;color:#c9d0ff;white-space:nowrap;opacity:calc(var(--e)*1.2)}
+@media (max-width:600px){.stk{--g:26px}.stkscene{height:min(520px,125vw)}.lay span{left:auto;right:0;top:calc(100% + 6px);transform:none}}
+@media (prefers-reduced-motion:reduce){.stk{--e:.55}}
 </style>
 <noscript><style>.reveal,.lo.reveal,.flowt tbody tr{opacity:1!important;filter:none!important;transform:none!important}</style></noscript>
 </head>
@@ -453,6 +462,17 @@ footer::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;po
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<section id="stack" hidden style="padding:90px 0 40px">
+  <div class="wrap">
+    <div class="reveal" style="text-align:center">
+      <div class="label">Layer by layer</div>
+      <h2>A chip is a stack.<br><span>Scroll to pull it apart.</span></h2>
+    </div>
+    <div class="stkscene" id="stkScene" aria-label="The tiny8 layout split into its layers: cells and Metal1 to Metal5"><div class="stk" id="stk"></div></div>
+    <p class="label" style="text-align:center">A real layout made in Studio: tiny8 on gf180mcuD. Each layer shows the real shapes, simplified to fit.</p>
   </div>
 </section>
 
@@ -657,6 +677,41 @@ document.querySelector(".wave").insertAdjacentHTML("beforeend", '<i class="scan"
 document.querySelectorAll("#what,#how,#proof,#problems,#flow,.mission.next,footer").forEach((el) => { el.classList.add("paused"); watch(el, (v) => el.classList.toggle("paused", !v)); });
 // safety: anything still hidden 2.5 s after it reaches the screen is shown
 document.querySelectorAll(".reveal").forEach((el) => { const o = new IntersectionObserver((es) => { if (es[0].isIntersecting) { setTimeout(() => el.classList.add("in"), 2500); o.disconnect(); } }); o.observe(el); });
+// 3D layer stack: loads when near the screen, moves only while on screen, scroll sets the pull-apart
+(async () => {
+  const sec = document.getElementById("stack"), scene = document.getElementById("stkScene"), stk = document.getElementById("stk");
+  const lowPower = still || saveData() || (navigator.deviceMemory && navigator.deviceMemory < 4);
+  new IntersectionObserver(async (es, o) => {
+    if (!es[0].isIntersecting) return; o.disconnect();
+    let d; try { d = await (await fetch("brand/media/tiny8-stack.json")).json(); } catch { return; }
+    const dpr = Math.min(devicePixelRatio || 1, 2), cols = ["#2a3a8a", "#4a63ff", "#6f86ff", "#9aabff", "#c4cdff", "#fff"];
+    d.layers.forEach((L, i) => {
+      const c = document.createElement("canvas"); c.width = d.w * Math.min(dpr, 1.5) | 0; c.height = d.h * Math.min(dpr, 1.5) | 0;
+      const x = c.getContext("2d"), k = c.width / d.w * d.cell; x.fillStyle = cols[i % 6];
+      for (let j = 0; j < L.rects.length; j += 4) x.fillRect(L.rects[j] * k, c.height - (L.rects[j + 1] + L.rects[j + 3]) * k, L.rects[j + 2] * k, L.rects[j + 3] * k);
+      const el = document.createElement("div"); el.className = "lay"; el.style.setProperty("--i", i);
+      el.innerHTML = `<span>${L.name}</span>`; el.prepend(c); stk.appendChild(el);
+    });
+    sec.hidden = false; document.querySelectorAll("#stack .reveal").forEach((e) => { e.classList.add("lo"); io.observe(e); });
+    if (lowPower) return;
+    let vis = false, tk = false;
+    const upd = () => { const r = scene.getBoundingClientRect(), p = 1 - (r.top + r.height / 2) / innerHeight / 1.1; stk.style.setProperty("--e", Math.min(1, Math.max(0, (p - .15) * 1.8)).toFixed(3)); };
+    watch(scene, (v) => { vis = v; if (v) upd(); });
+    addEventListener("scroll", () => { if (!vis || tk) return; tk = true; requestAnimationFrame(() => { tk = false; upd(); }); }, { passive: true });
+    upd();
+  }, { rootMargin: "700px" }).observe(sec.parentElement && document.getElementById("see"));
+})();
+
+// gentle 3D tilt on cards (mouse only)
+if (!still && matchMedia("(hover: hover) and (pointer: fine)").matches)
+  document.querySelectorAll(".two > a, #probs").forEach((n) => {
+    const tilt = (c, e) => { const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      c.style.transition = "transform .15s ease-out, border-color .3s, box-shadow .3s"; c.style.transform = `perspective(900px) rotateX(${(-y * 8).toFixed(2)}deg) rotateY(${(x * 8).toFixed(2)}deg) translateY(-4px)`; };
+    const off = (c) => { c.style.transition = "transform .5s, border-color .3s, box-shadow .3s"; c.style.transform = ""; };
+    if (n.id === "probs") { n.addEventListener("pointermove", (e) => { const c = e.target.closest(".card"); if (c) tilt(c, e); }); n.addEventListener("pointerout", (e) => { const c = e.target.closest(".card"); if (c && !c.contains(e.relatedTarget)) off(c); }); }
+    else { n.addEventListener("pointermove", (e) => tilt(n, e)); n.addEventListener("pointerleave", () => off(n)); }
+  });
+
 </script>
 </body>
 </html>
