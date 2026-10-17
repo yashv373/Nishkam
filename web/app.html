@@ -72,7 +72,8 @@ header { display: flex; align-items: center; gap: 16px; padding: 16px 18px; bord
 .tagline { color: var(--muted); font-style: italic; }
 .spacer { flex: 1; }
 .pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 12.5px; }
-.pill { min-height: 30px; box-sizing: border-box; }
+.pill { min-height: 30px; box-sizing: border-box; white-space: nowrap; }
+@media (max-width: 699px) { .nophone, .keynote, header .tagline { display: none !important; } }
 .dd { position: relative; } .ddtrg { border: 0; cursor: pointer; color: var(--ink); } .ddtrg svg { opacity: .7; transition: transform .15s; } .dd.open .ddtrg svg { transform: rotate(180deg); }
 .av { width: 22px; height: 22px; border-radius: 50%; background: #1430ff; color: #fff; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; object-fit: cover; }
 .ddpanel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; min-width: 220px; max-width: calc(100vw - 32px); padding: 6px; border-radius: 16px; color: #fff; background: rgba(18,20,30,.72); backdrop-filter: blur(22px) saturate(1.6); -webkit-backdrop-filter: blur(22px) saturate(1.6); border: 1px solid rgba(255,255,255,.16); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 18px 40px rgba(0,0,0,.45); opacity: 0; transform: translateY(-4px) scale(.97); transform-origin: top right; visibility: hidden; transition: opacity .14s, transform .14s, visibility 0s .14s; }
@@ -150,9 +151,9 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
   <a class="brand" href="./" style="color:inherit;text-decoration:none" aria-label="Nishkam home"><span class="logotype"></span></a>
   <span class="tagline">Invincible is just a word.</span>
   <span class="spacer"></span>
-  <a class="pill" href="studio.html" style="text-decoration:none" title="Studio needs an access key.">Open Studio</a><small class="keynote" style="opacity:.55;font-size:11px;white-space:nowrap">Studio needs an access key.</small>
+  <a class="pill nophone" href="studio.html" style="text-decoration:none" title="Studio needs an access key.">Open Studio</a><small class="keynote" style="opacity:.55;font-size:11px;white-space:nowrap">Studio needs an access key.</small>
   <span id="auth" hidden></span>
-  <button id="runnerBtn" class="pill"><span class="dot"></span><span id="runnerText">Local runner: off</span><small> (work in progress)</small></button>
+  <button id="runnerBtn" class="pill nophone"><span class="dot"></span><span id="runnerText">Local runner: off</span><small> (work in progress)</small></button>
 </header>
 <main>
   <nav id="list"></nav>
