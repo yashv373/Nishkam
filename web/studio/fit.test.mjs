@@ -1,5 +1,5 @@
 // node web/studio/fit.test.mjs  -- the fit check must reproduce the measured LibreLane runs (gf180mcuD, logs in nishkam_jobs).
-import { estimate, coreOf, netlistFacts, check } from "./fit.js";
+import { estimate, coreOf, netlistFacts, check, describe } from "./fit.js";
 let bad = 0;
 const near = (name, got, want, tol) => { const ok = Math.abs(got - want) <= tol; if (!ok) bad++; console.log(ok ? "PASS" : "FAIL", name, +got.toFixed(3), "want", want, "+-", tol); };
 // core area from the die (GPL-0016 "Core area"): 100 -> 5747.0, 120 -> 9175.9, 150 -> 16003.0, 170 -> 21436.1
@@ -19,5 +19,9 @@ near("tiny8 browser die GPL util", iss.gpl, 1.45, 0.08); if (!iss.fail) { bad++;
 const nf = netlistFacts("module m(a, b, y);\n input [7:0] a;\n input b;\n output y;\n gf180mcu_fd_sc_mcu7t5v0__nand2_1 u1 (.A1(a[0]));\n gf180mcu_fd_sc_mcu7t5v0__dffq_1 u2 (.D(b));\nendmodule",
   "MACRO gf180mcu_fd_sc_mcu7t5v0__nand2_1\n SIZE 3.36 BY 3.92 ;\nEND x\nMACRO gf180mcu_fd_sc_mcu7t5v0__dffq_1\n SIZE 16.8 BY 3.92 ;\n");
 near("netlist ports", nf.ports, 10, 0); near("netlist area", nf.logic, (3.36 + 16.8) * 3.92, 0.01); if (!nf.clocked) { bad++; console.log("FAIL clocked"); }
-if (!check("module m(a);\n input a;\n gf180mcu_fd_sc_mcu7t5v0__nand2_1 u1 ();\nendmodule", "MACRO gf180mcu_fd_sc_mcu7t5v0__nand2_1\n SIZE 3.36 BY 3.92 ;", 60, 60).lines.length) bad++;
+if (!check("module m(a);\n input a;\n gf180mcu_fd_sc_mcu7t5v0__nand2_1 u1 ();\nendmodule", "MACRO gf180mcu_fd_sc_mcu7t5v0__nand2_1\n SIZE 3.36 BY 3.92 ;", 60, 60).lines?.length) bad++;
+// suggested die must really fit: tiny8 at the browser die, take the suggested size from the warning, re-check it
+{ const w = describe(iss, 103.6, 101.92).find((l) => l.startsWith("WARNING")), n = +(w?.match(/about (\d+) x/) || [])[1];
+  const r = estimate({ logic: 8155.168, ports: 34, clocked: true, dieW: n, dieH: n });
+  if (!(r.util <= 0.71 && r.util > 0.6 && !r.fail)) { bad++; console.log("FAIL suggested die", n, r.util); } else console.log("PASS suggested die", n, +r.util.toFixed(3)); }
 process.exit(bad ? 1 : 0);

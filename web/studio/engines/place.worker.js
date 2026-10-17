@@ -12,7 +12,7 @@ else if (typeof process !== "undefined" && process.on) process.on("unhandledReje
 
 export const V = {
   gw: new URL("../../vendor/graywolf/33fbcaa/", import.meta.url),
-  qf: new URL("../../vendor/qrouter/c8f1111/", import.meta.url),
+  qf: new URL("../../vendor/qrouter/c8f1111-tight/", import.meta.url),
   pd: new URL("../../vendor/gf180mcu/pd-7b70722/", import.meta.url),
 };
 export const PDK = { lef: "gf180mcu_fd_sc_mcu7t5v0.lef", tlef: "gf180mcu_fd_sc_mcu7t5v0__nom.tlef", par: "gf180mcu_fd_sc_mcu7t5v0.par",

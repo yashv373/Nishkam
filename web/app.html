@@ -211,18 +211,18 @@ addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(
 .gatecard input{width:100%;height:44px;text-align:center;font-size:18px;letter-spacing:.2em;border-radius:12px;border:1px solid #6b74b8;background:#05071a;color:#fff}
 .gatecard input:focus-visible,.gbtn:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .gbtn{background:#1430ff;color:#fff;border:0;border-radius:12px;height:44px;min-width:120px;padding:0 28px;cursor:pointer;font:inherit}
-.gatesub{margin-top:8px!important}.gatecap{font-size:12px}.gbtn2{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);backdrop-filter:blur(28px) saturate(180%%);color:#fff;text-decoration:none;font:14px sans-serif;white-space:nowrap}.gbtn2:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.gatesub{margin-top:8px!important}.gatecap{font-size:12px}.gbtn2{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);backdrop-filter:blur(28px) saturate(180%);color:#fff;text-decoration:none;font:14px sans-serif;white-space:nowrap}.gbtn2:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #gateErr{color:#ff9a9a!important;min-height:1.2em}
 #gateToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;padding:10px 18px;border-radius:12px;background:#1430ff;color:#fff;font:14px sans-serif}
 </style>
 <script type="module">
 // Same client-side gate as Studio (studio/gate.js, same stored key). The practice code loads only after a good key.
 import { check, remember, remembered } from "./studio/gate.js";
-const boot = () => { document.querySelector("main").inert = false; import("./app.js").catch((e) => dispatchEvent(new ErrorEvent("error", { message: "module import failed: " + e.message }))); };
+const boot = () => { document.querySelectorAll("header,main").forEach((n) => { n.inert = false; }); import("./app.js").catch((e) => dispatchEvent(new ErrorEvent("error", { message: "module import failed: " + e.message }))); };
 const $ = (i) => document.getElementById(i);
 if (remembered()) boot();
 else {
-  document.querySelector("main").inert = true;
+  document.querySelectorAll("header,main").forEach((n) => { n.inert = true; });
   $("gate").hidden = false; $("gateKey").focus();
   $("gateForm").onsubmit = async (e) => {
     e.preventDefault();

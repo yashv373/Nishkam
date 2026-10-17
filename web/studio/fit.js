@@ -33,13 +33,15 @@ export function netlistFacts(netlist, lef) {
   return { logic, ports, clocked };
 }
 const f0 = (v) => Math.round(v).toLocaleString("en-US"), pc = (v) => Math.round(v * 100) + "%";
+// smallest square die (whole um) whose core, with the same margins, is at most 70% full
+const dieFor70 = (p) => { let d = 30; while (d < 3000 && estimate({ logic: p.logic, ports: p.io / K.ioBufArea, clocked: p.clk > 0, dieW: d, dieH: d }).util > 0.7) d++; return d; };
 export function describe(e, dieW, dieH) {
   const p = e.parts, lines = [
     `LibreLane fit check for a ${(+dieW).toFixed(1)} x ${(+dieH).toFixed(1)} µm die (core ${e.core.w.toFixed(1)} x ${(e.core.rows * K.siteH).toFixed(1)} µm = ${f0(e.core.area)} µm²):`,
     `  cells ${f0(p.logic)} µm² + taps and endcaps ${f0(p.taps + p.endcaps)} + port buffers ${f0(p.io)} + repair buffers ${f0(p.rep)}` + (p.clk ? ` + clock buffers ${f0(p.clk)}` : "") + ` = ${f0(e.total)} µm² = ${pc(e.util)} of the core.`,
     `  Global placement (where GPL-0301 is raised) sees ${pc(e.gpl)}: cells plus pin-density padding ${f0(p.logic * K.pinAdjust)} µm² over the core minus the taps.`,
   ];
-  if (e.fail) lines.push(`WARNING: this die is too small for LibreLane. It would stop at placement with error GPL-0301 (over 100% full), even though the browser flow can place it. Try a die of (about ${f0(Math.sqrt(e.total / 0.7))} x ${f0(Math.sqrt(e.total / 0.7))} µm for about 70% fill).`);
+  if (e.fail) lines.push(`WARNING: this die is too small for LibreLane. It would stop at placement with error GPL-0301 (over 100% full), even though the browser flow can place it. Try a die of (about ${dieFor70(p)} x ${dieFor70(p)} µm for about 70% fill).`);
   else if (e.util > 1) lines.push(`WARNING: the final cell count (${pc(e.util)} of the core) cannot fit in LibreLane on this die.`);
   return lines;
 }
