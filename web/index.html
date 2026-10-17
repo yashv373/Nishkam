@@ -358,13 +358,16 @@ footer::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;po
 @media (prefers-reduced-motion:reduce){.lo.reveal,.flowt tbody tr{opacity:1!important;filter:none!important;transform:none!important}.marq div,.scan,.beam,footer::before,.mission.next::before,#what::before,.steps::after{animation:none!important}.marq{overflow-x:auto}}
 
 /* 3D layer stack (CSS 3D, real tiny8 shapes) + card tilt */
-.stkscene{perspective:1500px;height:min(640px,150vw);display:flex;align-items:center;justify-content:center;margin:10px 0 0;overflow:hidden}
+.stkscene{perspective:1500px;height:min(470px,100vw);display:flex;align-items:center;justify-content:center;margin:0;overflow:hidden}
+.stkpin{display:flex;flex-direction:column;justify-content:center}
+#stack.pin{padding:0!important}#stack.pin .stkhold{height:175vh}#stack.pin .stkpin{position:sticky;top:0;height:100vh;padding-top:70px}#stack.pin .stkscene{height:auto;flex:1;min-height:0}#stack.pin .stkscene{overflow:visible}#stack{overflow-x:clip}#stack.pin .stkscene{margin:64px 0 36px}#stack.pin .stk{--s:min(250px,25vh,48vw);--g:min(40px,4.2vh);translate:0 3vh}.stkleg{position:relative;z-index:2}#stack.pin h2{font-size:clamp(34px,7vh,72px)}#stack.pin .stkpin{padding-top:92px}
+.stkleg{list-style:none;display:flex;flex-wrap:wrap;justify-content:center;gap:8px 22px;margin:6px 0 14px;padding:0;opacity:var(--le,0)}
+.stkleg li{font:500 13.5px var(--mono);letter-spacing:.04em;color:#fff;display:flex;align-items:center;gap:8px}.stkleg i{width:12px;height:12px;border-radius:3px;box-shadow:0 0 10px currentColor}
 .stk{--s:min(360px,64vw);--e:0;position:relative;width:var(--s);height:var(--s);transform-style:preserve-3d;transform:rotateX(calc(70deg - var(--e)*14deg)) rotateZ(calc(-20deg - var(--e)*28deg)) translateY(calc(var(--e)*18%))}
 .lay{position:absolute;inset:0;transform:translateZ(calc(var(--i)*var(--e)*var(--g,60px)));border:1px solid rgba(120,140,255,.7);background:rgba(8,12,40,.55);box-shadow:0 0 22px rgba(74,99,255,.4),inset 0 0 18px rgba(74,99,255,.25)}
 .lay canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.95}
-.lay span{position:absolute;left:calc(100% + 14px);top:50%;transform:translateY(-50%);font:500 12px var(--mono);letter-spacing:.06em;color:#c9d0ff;white-space:nowrap;opacity:calc(var(--e)*1.2)}
-@media (max-width:600px){.stk{--g:26px}.stkscene{height:min(520px,125vw)}.lay span{left:auto;right:0;top:calc(100% + 6px);transform:none}}
-@media (prefers-reduced-motion:reduce){.stk{--e:.55}}
+@media (max-width:600px){.stk{--g:26px}.stkscene{height:min(380px,100vw)}}
+@media (prefers-reduced-motion:reduce){.stk{--e:.55}.stkleg{opacity:1}}
 </style>
 <noscript><style>.reveal,.lo.reveal,.flowt tbody tr{opacity:1!important;filter:none!important;transform:none!important}</style></noscript>
 </head>
@@ -466,14 +469,15 @@ footer::before{content:"";position:absolute;left:0;right:0;top:0;height:160px;po
 </section>
 
 <section id="stack" hidden style="padding:90px 0 40px">
-  <div class="wrap">
+  <div class="stkhold" id="stkHold"><div class="stkpin"><div class="wrap">
     <div class="reveal" style="text-align:center">
       <div class="label">Layer by layer</div>
       <h2>A chip is a stack.<br><span>Scroll to pull it apart.</span></h2>
     </div>
     <div class="stkscene" id="stkScene" aria-label="The tiny8 layout split into its layers: cells and Metal1 to Metal5"><div class="stk" id="stk"></div></div>
-    <p class="label" style="text-align:center">A real layout made in Studio: tiny8 on gf180mcuD. Each layer shows the real shapes, simplified to fit.</p>
-  </div>
+    <ul class="stkleg" id="stkLeg"></ul>
+    <p class="label" style="text-align:center;margin:0">A real layout made in Studio: tiny8 on gf180mcuD. Each layer shows the real shapes, simplified to fit.</p>
+  </div></div></div>
 </section>
 
 <section id="how">
@@ -690,13 +694,16 @@ document.querySelectorAll(".reveal").forEach((el) => { const o = new Intersectio
       const x = c.getContext("2d"), k = c.width / d.w * d.cell; x.fillStyle = cols[i % 6];
       for (let j = 0; j < L.rects.length; j += 4) x.fillRect(L.rects[j] * k, c.height - (L.rects[j + 1] + L.rects[j + 3]) * k, L.rects[j + 2] * k, L.rects[j + 3] * k);
       const el = document.createElement("div"); el.className = "lay"; el.style.setProperty("--i", i);
-      el.innerHTML = `<span>${L.name}</span>`; el.prepend(c); stk.appendChild(el);
+      el.prepend(c); stk.appendChild(el);
+      document.getElementById("stkLeg").insertAdjacentHTML("afterbegin", `<li><i style="background:${cols[i % 6]};color:${cols[i % 6]}"></i>${L.name}</li>`);
     });
     sec.hidden = false; document.querySelectorAll("#stack .reveal").forEach((e) => { e.classList.add("lo"); io.observe(e); });
-    if (lowPower) return;
+    if (lowPower) { scene.parentElement.style.setProperty("--le", 1); return; }
     let vis = false, tk = false;
-    const upd = () => { const r = scene.getBoundingClientRect(), p = 1 - (r.top + r.height / 2) / innerHeight / 1.1; stk.style.setProperty("--e", Math.min(1, Math.max(0, (p - .15) * 1.8)).toFixed(3)); };
-    watch(scene, (v) => { vis = v; if (v) upd(); });
+    const hold = document.getElementById("stkHold"); sec.classList.add("pin"); // sticky pin: scroll first pulls apart, then holds
+    const upd = () => { const r = hold.getBoundingClientRect(), p = -r.top / (r.height - innerHeight), e = Math.min(1, Math.max(0, (p + .05) / .5));
+      stk.style.setProperty("--e", e.toFixed(3)); stk.parentElement.parentElement.style.setProperty("--le", e.toFixed(3)); };
+    watch(hold, (v) => { vis = v; if (v) upd(); });
     addEventListener("scroll", () => { if (!vis || tk) return; tk = true; requestAnimationFrame(() => { tk = false; upd(); }); }, { passive: true });
     upd();
   }, { rootMargin: "700px" }).observe(sec.parentElement && document.getElementById("see"));
