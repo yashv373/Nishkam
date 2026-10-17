@@ -318,21 +318,46 @@ function recordSolve(problem, files) {
 }
 function showAuth() {
   const box = $("auth");
+  const item = (t, o = {}) => { const e = document.createElement(o.href ? "a" : "button"); e.className = "mi" + (o.cls ? " " + o.cls : ""); e.setAttribute("role", "menuitem"); e.tabIndex = -1; e.textContent = t; if (o.href) e.href = o.href; if (o.on) e.onclick = o.on; return e; };
+  const wrap = document.createElement("div"); wrap.className = "dd";
+  const trg = document.createElement("button"); trg.className = "pill ddtrg"; trg.setAttribute("aria-haspopup", "menu"); trg.setAttribute("aria-expanded", "false");
+  const pnl = document.createElement("div"); pnl.className = "ddpanel"; pnl.setAttribute("role", "menu");
   if (fbUser) {
-    const img = fbUser.photoURL ? `<img src="${esc(fbUser.photoURL)}" alt="" width="22" height="22" style="border-radius:50%" referrerpolicy="no-referrer">` : `<span aria-hidden="true">●</span>`;
-    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}${me ? ` · ${me.points} point${me.points === 1 ? "" : "s"}` : ""}</span></button>${me?.is_admin ? '<a class="pill" href="admin.html" style="text-decoration:none;background:#1430ff;color:#fff;font-weight:600">Admin</a>' : ""}${menuOpen ? `<a class="pill" href="profile.html" style="text-decoration:none">My profile</a><button class="pill" id="out">Sign out</button>` : ""}`;
-    $("signout").onclick = () => { menuOpen = !menuOpen; showAuth(); };
-    if ($("out")) $("out").onclick = () => auth.mod.signOut(auth.auth);
+    if (fbUser.photoURL) { const i = new Image(22, 22); i.alt = ""; i.referrerPolicy = "no-referrer"; i.src = fbUser.photoURL; i.className = "av"; trg.append(i); }
+    else { const i = document.createElement("span"); i.className = "av"; i.setAttribute("aria-hidden", "true"); i.textContent = (fbUser.displayName || fbUser.email || "?")[0].toUpperCase(); trg.append(i); }
+    const full = fbUser.displayName || fbUser.email || "Signed in";
+    const t = document.createElement("span"); t.textContent = full.split(/\s+/)[0] + (me ? ` · ${me.points} pt${me.points === 1 ? "" : "s"}` : "");
+    trg.append(t);
+    const hd = document.createElement("div"); hd.className = "mh"; const n = document.createElement("b"); n.textContent = full; hd.append(n);
+    if (me?.handle) { const hh = document.createElement("span"); hh.textContent = "@" + me.handle; hd.append(hh); }
+    pnl.append(hd, item("My profile", { href: "profile.html" }));
+    if (me?.is_admin) pnl.append(item("Admin panel", { href: "admin.html", cls: "adm" }));
+    const hr = document.createElement("hr"); pnl.append(hr, item("Sign out", { on: () => auth?.mod.signOut(auth.auth) }));
   } else {
-    box.innerHTML = `<button class="pill" id="signin">Sign in</button>`;
-    $("signin").onclick = () => {
-      box.innerHTML = `<span class="pill">Sign in with <button id="gG" class="pill">Google</button><button id="gH" class="pill">GitHub</button></span>`;
-      const go = (P) => () => auth.mod.signInWithPopup(auth.auth, new auth.mod[P]()).catch(showAuth);
-      $("gG").onclick = go("GoogleAuthProvider"); $("gH").onclick = go("GithubAuthProvider");
-    };
+    trg.append("Sign in");
+    const go = (P) => () => auth.mod.signInWithPopup(auth.auth, new auth.mod[P]()).catch(showAuth);
+    pnl.append(item("Continue with Google", { on: go("GoogleAuthProvider") }), item("Continue with GitHub", { on: go("GithubAuthProvider") }));
   }
+  const chev = document.createElementNS("http://www.w3.org/2000/svg", "svg"); chev.setAttribute("viewBox", "0 0 10 6"); chev.setAttribute("width", "9"); chev.setAttribute("height", "6"); chev.setAttribute("aria-hidden", "true");
+  chev.innerHTML = '<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'; trg.append(chev);
+  const items = () => [...pnl.querySelectorAll('[role="menuitem"]')];
+  const close = (back) => { wrap.classList.remove("open"); trg.setAttribute("aria-expanded", "false"); menuOpen = false; if (back) trg.focus(); };
+  const open = () => { wrap.classList.add("open"); trg.setAttribute("aria-expanded", "true"); menuOpen = true; items()[0]?.focus(); };
+  trg.onclick = () => (menuOpen ? close(true) : open());
+  trg.onkeydown = (e) => { if (e.key === "ArrowDown" && !menuOpen) { e.preventDefault(); open(); } };
+  pnl.onkeydown = (e) => {
+    const l = items(), i = l.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); close(true); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); l[(i + 1) % l.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); l[(i - 1 + l.length) % l.length].focus(); }
+    else if (e.key === "Tab") close();
+  };
+  wrap.append(trg, pnl);
+  box.replaceChildren(wrap);
+  if (menuOpen) { wrap.classList.add("open"); trg.setAttribute("aria-expanded", "true"); }
   box.hidden = false;
 }
+document.addEventListener("click", (e) => { const w = document.querySelector(".dd.open"); if (w && !w.contains(e.target)) { w.classList.remove("open"); w.firstChild.setAttribute("aria-expanded", "false"); menuOpen = false; } });
 async function refreshMe() {
   try {
     const r = await api("/me");
@@ -369,7 +394,10 @@ async function initAuth() {
   auth = { mod, auth: mod.getAuth(initializeApp(cfg.firebase)) };
   mod.onAuthStateChanged(auth.auth, async (u) => { fbUser = u; showAuth(); if (u) await refreshMe(); else { reviewsLeft = null; me = null; } showExplain(); });
 }
-initAuth().catch(() => {});
+// Test-only: ?mock=1 / ?mock=admin on localhost renders a fake signed-in user, no network.
+const MOCK = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && new URLSearchParams(location.search).get("mock");
+if (MOCK) { fbUser = { displayName: "Asha Rao", email: "a@x.io" }; me = { points: 4, handle: "asha", is_admin: MOCK === "admin" }; showAuth(); }
+else initAuth().catch(() => {});
 
 // text version of the cycle table, same cells the page shows
 function cexText(cex) {
