@@ -4,6 +4,7 @@ export const STAGES = [
   { id: "files", label: "Sources", group: 0, where: "browser", virtual: true },
   { id: "lint", label: "Lint", group: 0, where: "browser", engine: "yosys", pick: "lintEngine", opts: { mode: "lint" }, src: "rtl" },
   { id: "sim", label: "Simulation", group: 1, where: "browser", engine: "icarus", pick: "simEngine", tab: "Waveform", src: "sim" },
+  { id: "verify", label: "Verify", group: 1, where: "browser", engine: "verify", tab: "Verify", src: "verify" },
   { id: "synth", label: "Synthesis", group: 2, where: "browser", engine: "yosys", opts: { mode: "synth" }, src: "rtl" },
   { id: "schematic", label: "Schematic", group: 2, where: "browser", engine: "netlistsvg", tab: "Schematic", in: ["rtl.json", "netlist.json"] },
   { id: "floorplan", label: "Floorplan", group: 3, where: "runner", tab: "Layout" },
@@ -179,7 +180,7 @@ export async function runStages(ids, deps) {
     try { eng = await deps.engine(byId(id)); }
     catch (e) { mark([id], "unavailable", "engine not available yet"); deps.onLog(id, "WARNING: engine not available yet (" + e.message + ")"); continue; }
     const st = byId(id);
-    if (st.src === "sim" && !deps.options().tb) {   // no testbench: skip when part of a flow, say so plainly when run alone
+    if ((st.src === "sim" || (st.src === "verify" && deps.options().vMode === "tb")) && !deps.options().tb) {   // no testbench: skip when part of a flow, say so plainly when run alone
       if (ids.length === 1) { ok = false; deps.onLog(id, "ERROR: No testbench selected. Pick one in Properties → Testbench."); mark([id], "failed", "no testbench"); }
       else { deps.onLog(id, "Simulation skipped: no testbench selected."); mark([id], "unavailable", "skipped: no testbench"); }
       continue;
@@ -196,7 +197,8 @@ export async function runStages(ids, deps) {
       deps.onResult?.(id, r);
       if (!r.ok) ok = false;
       const sm = r.summary || {}, w = sm.warnings;
-      if (!r.ok) mark([id], "failed", sm.error || (sm.errors ? sm.errors + " errors" : undefined));
+      if (!r.ok) mark([id], "failed", sm.error || (sm.errors ? sm.errors + " errors" : undefined) || (st.src === "verify" ? (sm.results || []).filter((x) => x.status === "failed" || x.status === "error").length + " failed" : undefined));
+      else if (sm.skipped) mark([id], "unavailable", "skipped: " + sm.skipped);
       else if (w > 0 || /FAIL/.test(sm.stdout || "")) mark([id], "warn", w > 0 ? w + "W" : "tb FAIL");
       else mark([id], "passed");
     } catch (e) {

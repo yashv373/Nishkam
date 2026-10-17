@@ -15,7 +15,7 @@ export function mount(container) {
   let blob, lastVcd;
   const ready = new Promise((res) => frame.addEventListener("load", res, { once: true }));
   container.append(frame);
-  const send = (msg) => frame.contentWindow.inject_message?.(JSON.stringify(msg));
+  const send = (msg) => frame.contentWindow?.inject_message?.(JSON.stringify(msg));
   return {
     frame,
     // Waits for Surfer's wasm (it defines window.inject_message), then loads each VCD exactly once:
