@@ -3,5 +3,6 @@ Allow: /
 Disallow: /studio/engines/selftest.html
 Disallow: /studio/viewers/harness.html
 Disallow: /admin.html
+Disallow: /profile.html
 
 Sitemap: https://nishkam.world/sitemap.xml
