@@ -1,7 +1,10 @@
 const ORIGINS = ["https://nishkam.world", "http://localhost:8000"];
 const JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
 const MODEL = "@cf/qwen/qwen2.5-coder-32b-instruct";
-const QUOTA = 2, MAX_BODY = 20 * 1024;
+const QUOTA = 2, MAX_BODY = 20 * 1024, KEEP = 2;
+const DEFAULTS = { ai_review: "on", signups: "on", studio: "on", banner: "" };
+const TOGGLES = ["ai_review", "signups", "studio"];
+const DAY = 86400000;
 const enc = new TextEncoder(), dec = new TextDecoder();
 
 const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
@@ -48,8 +51,11 @@ export async function handle(req, env, getKeys = fetchKeys) {
   if (origin && !ok) return json({ error: "origin not allowed" }, 403);
 
   const path = new URL(req.url).pathname;
-  if (!["/me", "/me/solved", "/review"].includes(path)) return json({ error: "not found" }, 404);
-  if (req.method !== (path === "/me" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
+  const flagRows = async () => ({ ...DEFAULTS, ...Object.fromEntries(((await env.DB.prepare("SELECT key,value FROM flags").bind().all()).results || []).map((r) => [r.key, r.value])) });
+  if (path === "/flags" && req.method === "GET")
+    return new Response(JSON.stringify(await flagRows()), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", ...cors } });
+  if (!["/me", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags"].includes(path)) return json({ error: "not found" }, 404);
+  if (req.method !== (path === "/me" || path === "/admin/stats" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
 
   const tok = /^Bearer (.+)$/.exec(req.headers.get("Authorization") || "")?.[1];
   let claims;
@@ -58,29 +64,66 @@ export async function handle(req, env, getKeys = fetchKeys) {
     catch (e) { if (e.message !== "kid") throw e; claims = await verify(tok, env.FIREBASE_PROJECT_ID, await getKeys(true)); } // key rotated
   } catch { return json({ error: "not signed in" }, 401); }
   const uid = claims.sub;
-  await env.DB.prepare("INSERT INTO users (uid,email,name,created) VALUES (?,?,?,?) ON CONFLICT(uid) DO UPDATE SET email=excluded.email, name=excluded.name")
-    .bind(uid, claims.email || "", claims.name || "", Date.now()).run();
+  const now = Date.now();
+  const isAdmin = claims.email_verified === true && !!claims.email &&
+    String(env.ADMIN_EMAILS || "").toLowerCase().split(",").map((e) => e.trim()).includes(claims.email.toLowerCase());
+  if (path.startsWith("/admin/") && !isAdmin) return json({ error: "admins only" }, 403);
+  if (await env.DB.prepare("SELECT uid FROM users WHERE uid=?").bind(uid).first())
+    await env.DB.prepare("UPDATE users SET email=?, name=?, last_seen=? WHERE uid=?").bind(claims.email || "", claims.name || "", now, uid).run();
+  else {
+    if ((await flagRows()).signups === "off") return json({ error: "New sign-ups are paused." }, 403);
+    await env.DB.prepare("INSERT INTO users (uid,email,name,created,last_seen) VALUES (?,?,?,?,?)").bind(uid, claims.email || "", claims.name || "", now, now).run();
+  }
+
+  if (path === "/admin/stats") {
+    const t = await env.DB.prepare("SELECT COUNT(*) total, SUM(created>=?) d1, SUM(created>=?) d7, SUM(created>=?) d30, SUM(last_seen>=?) active7 FROM users")
+      .bind(now - (now % DAY), now - 7 * DAY, now - 30 * DAY, now - 7 * DAY).first();
+    const rv = await env.DB.prepare("SELECT COUNT(*) total, SUM(at>=?) today FROM reviews").bind(now - (now % DAY)).first();
+    const perProblem = {};
+    for (const r of (await env.DB.prepare("SELECT solved FROM users").bind().all()).results || [])
+      for (const id of JSON.parse(r.solved || "[]")) perProblem[id] = (perProblem[id] || 0) + 1; // ponytail: scans all users, fine to ~10k
+    const log = (await env.DB.prepare("SELECT who,what,at FROM admin_log ORDER BY at DESC LIMIT 50").bind().all()).results || [];
+    return json({ users: t.total, signups: { today: t.d1 || 0, d7: t.d7 || 0, d30: t.d30 || 0 }, active7: t.active7 || 0,
+      solves: { total: Object.values(perProblem).reduce((a, b) => a + b, 0), perProblem },
+      reviews: { total: rv.total, today: rv.today || 0 }, flags: await flagRows(), log });
+  }
+  if (path === "/admin/flags") {
+    let f; try { f = JSON.parse(await req.text()); } catch { return json({ error: "bad json" }, 400); }
+    const okVal = TOGGLES.includes(f?.key) ? (f.value === "on" || f.value === "off") : f?.key === "banner" && typeof f.value === "string" && f.value.length <= 300;
+    if (!okVal) return json({ error: "bad flag" }, 400);
+    await env.DB.prepare("INSERT INTO flags (key,value,updated_by,updated_at) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_by=excluded.updated_by, updated_at=excluded.updated_at")
+      .bind(f.key, f.value, claims.email, now).run();
+    await env.DB.prepare("INSERT INTO admin_log (who,what,at) VALUES (?,?,?)").bind(claims.email, `set ${f.key} = ${f.value || "(empty)"}`, now).run();
+    return json({ ok: true });
+  }
 
   if (path === "/me") {
     const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used FROM users WHERE uid=?").bind(uid).first();
-    return json({ ...u, solved: JSON.parse(u.solved || "[]"), reviews_left: Math.max(0, QUOTA - u.reviews_used) });
+    const solved = JSON.parse(u.solved || "[]");
+    return json({ uid: u.uid, email: u.email, name: u.name, created: u.created, solved, points: solved.length, reviews_left: Math.max(0, QUOTA - u.reviews_used), is_admin: isAdmin });
   }
 
   const text = await req.text();
   if (enc.encode(text).length > MAX_BODY) return json({ error: "too big" }, 413);
   let b; try { b = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
-  if (typeof b?.problemId !== "string" || !/^[a-z0-9-]{1,64}$/.test(b.problemId)) return json({ error: "bad problem id" }, 400);
+  const pid = b?.problem ?? b?.problemId;
+  if (typeof pid !== "string" || !/^[a-z0-9-]{1,64}$/.test(pid)) return json({ error: "bad problem id" }, 400);
 
-  if (path === "/me/solved") {
+  if (path === "/solve" || path === "/me/solved") {
+    const files = b.files && typeof b.files === "object" && !Array.isArray(b.files) ? b.files : {};
+    if (Object.values(files).some((v) => typeof v !== "string")) return json({ error: "bad files" }, 400);
     // ponytail: read-modify-write; two simultaneous solves can lose one, harmless (re-solving adds it back).
-    const u = await env.DB.prepare("SELECT solved FROM users WHERE uid=?").bind(uid).first();
-    const s = new Set(JSON.parse(u.solved || "[]")); s.add(b.problemId);
-    await env.DB.prepare("UPDATE users SET solved=? WHERE uid=?").bind(JSON.stringify([...s]), uid).run();
-    return json({ ok: true, solved: [...s] });
+    const u = await env.DB.prepare("SELECT solved, code FROM users WHERE uid=?").bind(uid).first();
+    const s = new Set(JSON.parse(u.solved || "[]")); s.add(pid);
+    const code = JSON.parse(u.code || "{}");
+    if (Object.keys(files).length) code[pid] = [{ at: now, files }, ...(code[pid] || [])].slice(0, KEEP); // last 2 per problem
+    await env.DB.prepare("UPDATE users SET solved=?, code=? WHERE uid=?").bind(JSON.stringify([...s]), JSON.stringify(code), uid).run();
+    return json({ ok: true, solved: [...s], points: s.size });
   }
 
   // /review: take one use atomically first, refund if the AI call fails.
   for (const k of ["problemText", "userRtl", "cycleTable"]) if (typeof b[k] !== "string" || !b[k]) return json({ error: "missing " + k }, 400);
+  if ((await flagRows()).ai_review === "off") return json({ error: "The explainer is switched off for now." }, 503);
   const take = await env.DB.prepare("UPDATE users SET reviews_used=reviews_used+1 WHERE uid=? AND reviews_used<?").bind(uid, QUOTA).run();
   if (take.meta.changes !== 1) return json({ error: "No free explanations left." }, 429);
   try {
@@ -89,6 +132,7 @@ export async function handle(req, env, getKeys = fetchKeys) {
       { role: "user", content: `Problem:\n${b.problemText}\n\nStudent code:\n${b.userRtl}\n\nFirst failing cycles:\n${b.cycleTable}` }] });
     const hint = clean(r?.response || "");
     if (!hint) throw new Error("empty");
+    await env.DB.prepare("INSERT INTO reviews (uid,at) VALUES (?,?)").bind(uid, now).run();
     const u = await env.DB.prepare("SELECT reviews_used FROM users WHERE uid=?").bind(uid).first();
     return json({ hint, reviews_left: Math.max(0, QUOTA - u.reviews_used) });
   } catch {

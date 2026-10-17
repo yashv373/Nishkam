@@ -310,18 +310,19 @@ async function runFlow(p, files, knobs, target = $("result")) {
 checkRunner();
 
 // ---------- optional sign-in + "explain this failure" (needs web/config.js filled in; otherwise nothing shows) ----------
-let auth = null, fbUser = null, reviewsLeft = null, API = "";
+let auth = null, fbUser = null, reviewsLeft = null, API = "", me = null, menuOpen = false;
 const authHdr = async () => ({ Authorization: "Bearer " + await fbUser.getIdToken(), "Content-Type": "application/json" });
 const api = async (path, body) => fetch(API + path, { method: body ? "POST" : "GET", headers: await authHdr(), body: body && JSON.stringify(body) });
-function recordSolve(problem) {
-  if (fbUser) api("/me/solved", { problemId: problem }).catch(() => {});
+function recordSolve(problem, files) {
+  if (fbUser) api("/solve", { problem, files }).then(refreshMe).catch(() => {});
 }
 function showAuth() {
   const box = $("auth");
   if (fbUser) {
     const img = fbUser.photoURL ? `<img src="${esc(fbUser.photoURL)}" alt="" width="22" height="22" style="border-radius:50%" referrerpolicy="no-referrer">` : `<span aria-hidden="true">●</span>`;
-    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}</span></button>`;
-    $("signout").onclick = () => auth.mod.signOut(auth.auth);
+    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}${me ? ` · ${me.points} point${me.points === 1 ? "" : "s"}` : ""}</span></button>${menuOpen ? `${me?.is_admin ? '<a class="pill" href="admin.html" style="text-decoration:none">Admin</a>' : ""}<button class="pill" id="out">Sign out</button>` : ""}`;
+    $("signout").onclick = () => { menuOpen = !menuOpen; showAuth(); };
+    if ($("out")) $("out").onclick = () => auth.mod.signOut(auth.auth);
   } else {
     box.innerHTML = `<button class="pill" id="signin">Sign in</button>`;
     $("signin").onclick = () => {
@@ -336,11 +337,16 @@ async function refreshMe() {
   try {
     const r = await api("/me");
     if (!r.ok) return;
-    const me = await r.json();
+    me = await r.json();
     reviewsLeft = me.reviews_left;
     // first sign-in on this browser: upload solves kept in localStorage
     const extra = [...solved].filter((id) => !me.solved.includes(id) && /^[a-z0-9-]{1,64}$/.test(id));
-    await Promise.all(extra.map((id) => api("/me/solved", { problemId: id }).catch(() => {})));
+    if (extra.length && !store.get("uploaded", false)) {
+      store.set("uploaded", true);
+      await Promise.all(extra.map((id) => api("/solve", { problem: id, files: {} }).catch(() => {})));
+      return refreshMe();
+    }
+    showAuth();
   } catch { /* backend unreachable: page works as before */ }
 }
 async function initAuth() {
@@ -350,7 +356,7 @@ async function initAuth() {
   const V = "https://www.gstatic.com/firebasejs/11.0.2/";
   const [{ initializeApp }, mod] = await Promise.all([import(V + "firebase-app.js"), import(V + "firebase-auth.js")]);
   auth = { mod, auth: mod.getAuth(initializeApp(cfg.firebase)) };
-  mod.onAuthStateChanged(auth.auth, async (u) => { fbUser = u; showAuth(); if (u) await refreshMe(); else reviewsLeft = null; showExplain(); });
+  mod.onAuthStateChanged(auth.auth, async (u) => { fbUser = u; showAuth(); if (u) await refreshMe(); else { reviewsLeft = null; me = null; } showExplain(); });
 }
 initAuth().catch(() => {});
 

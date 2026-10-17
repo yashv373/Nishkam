@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Nishkam admin</title>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<style>
+:root { --bg:#f6f5f1; --panel:#fff; --ink:#1b1b1a; --muted:#6b6a66; --line:#e3e1da; --accent:#1430ff; --accent-ink:#fff; --bad:#b3261e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#121211; --panel:#1b1b1a; --ink:#ecebe6; --muted:#9a9890; --line:#2c2c2a; --accent:#5b78ff; --accent-ink:#0b0b0d; --bad:#ff8a80; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 Inter, system-ui, sans-serif; }
+header { display:flex; align-items:center; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); background:var(--panel); }
+header a { color:var(--ink); }
+main { max-width:900px; margin:0 auto; padding:18px; }
+h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:26px 0 8px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+.card b { display:block; font-size:24px; } .card span { color:var(--muted); font-size:12.5px; }
+button { font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:7px 14px; min-height:44px; }
+button.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+input[type=text] { flex:1; min-width:200px; font:inherit; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--ink); }
+table { border-collapse:collapse; width:100%; } td { padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+.muted { color:var(--muted); } .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<header><a href="app.html">&larr; Practice</a><b>Nishkam admin</b></header>
+<main id="main"><p class="muted">Loading…</p></main>
+<script type="module" src="admin.js"></script>
+</body>
+</html>
