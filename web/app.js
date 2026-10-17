@@ -1,6 +1,7 @@
 import { PROBLEMS, HARDEN_KNOBS } from "./problems.js";
 window.__nkBoot = 1;
 import { DEPTH } from "./grader.js";
+import { avatar } from "./avatar.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -323,9 +324,8 @@ function showAuth() {
   const trg = document.createElement("button"); trg.className = "pill ddtrg"; trg.setAttribute("aria-haspopup", "menu"); trg.setAttribute("aria-expanded", "false");
   const pnl = document.createElement("div"); pnl.className = "ddpanel"; pnl.setAttribute("role", "menu");
   if (fbUser) {
-    if (fbUser.photoURL) { const i = new Image(22, 22); i.alt = ""; i.referrerPolicy = "no-referrer"; i.src = fbUser.photoURL; i.className = "av"; trg.append(i); }
-    else { const i = document.createElement("span"); i.className = "av"; i.setAttribute("aria-hidden", "true"); i.textContent = (fbUser.displayName || fbUser.email || "?")[0].toUpperCase(); trg.append(i); }
-    const full = fbUser.displayName || fbUser.email || "Signed in";
+    const full = me?.name || fbUser.displayName || fbUser.email || "Signed in";
+    trg.append(avatar(full, me?.avatar_url, 22));
     const t = document.createElement("span"); t.textContent = full.split(/\s+/)[0];
     trg.append(t);
     const hd = document.createElement("div"); hd.className = "mh"; const n = document.createElement("b"); n.textContent = full; hd.append(n);

@@ -5,6 +5,7 @@ const QUOTA = 2, MAX_BODY = 20 * 1024, KEEP = 2;
 const DEFAULTS = { ai_review: "on", signups: "on", studio: "on", banner: "" };
 const TOGGLES = ["ai_review", "signups", "studio"];
 const DAY = 86400000;
+const MAX_AVATAR = 16 * 1024, AVATARS_PER_DAY = 5;
 const HANDLE = /^[a-z0-9_]{3,20}$/;
 const enc = new TextEncoder(), dec = new TextDecoder();
 
@@ -54,15 +55,23 @@ export async function handle(req, env, getKeys = fetchKeys) {
   const cors = ok ? { "Access-Control-Allow-Origin": origin, Vary: "Origin" } : { Vary: "Origin" };
   const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { "Content-Type": "application/json", ...cors } });
   if (req.method === "OPTIONS")
-    return ok ? new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET,POST", "Access-Control-Allow-Headers": "Authorization,Content-Type", "Access-Control-Max-Age": "86400" } }) : new Response(null, { status: 403 });
+    return ok ? new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "GET,POST,DELETE", "Access-Control-Allow-Headers": "Authorization,Content-Type", "Access-Control-Max-Age": "86400" } }) : new Response(null, { status: 403 });
   if (origin && !ok) return json({ error: "origin not allowed" }, 403);
 
   const path = new URL(req.url).pathname;
   const flagRows = async () => ({ ...DEFAULTS, ...Object.fromEntries(((await env.DB.prepare("SELECT key,value FROM flags").bind().all()).results || []).map((r) => [r.key, r.value])) });
   if (path === "/flags" && req.method === "GET")
     return new Response(JSON.stringify(await flagRows()), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", ...cors } });
-  if (!["/me", "/me/handle", "/me/bio", "/leaderboard", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags", "/admin/deck"].includes(path)) return json({ error: "not found" }, 404);
-  if (req.method !== (path === "/me" || path === "/leaderboard" || path === "/admin/stats" || path === "/admin/deck" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
+  const av = /^\/avatar\/([A-Za-z0-9_-]{1,128})\.webp$/.exec(path);
+  if (av && req.method === "GET") { // public: plain <img> tags load this, no sign-in
+    const r = await env.DB.prepare("SELECT img,type,v FROM avatars WHERE uid=?").bind(av[1]).first();
+    if (!r) return new Response("not found", { status: 404, headers: cors });
+    const h = { "Content-Type": r.type, "Cache-Control": "public, max-age=86400", ETag: `"${r.v}"`, "Cross-Origin-Resource-Policy": "cross-origin", ...cors };
+    if (req.headers.get("If-None-Match") === h.ETag) return new Response(null, { status: 304, headers: h });
+    return new Response(new Uint8Array(r.img), { headers: h });
+  }
+  if (!["/me", "/me/handle", "/me/bio", "/me/name", "/me/avatar", "/leaderboard", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags", "/admin/deck"].includes(path)) return json({ error: "not found" }, 404);
+  if (path === "/me/avatar" ? !["POST", "DELETE"].includes(req.method) : req.method !== (path === "/me" || path === "/leaderboard" || path === "/admin/stats" || path === "/admin/deck" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
 
   const tok = /^Bearer (.+)$/.exec(req.headers.get("Authorization") || "")?.[1];
   let claims;
@@ -97,13 +106,14 @@ export async function handle(req, env, getKeys = fetchKeys) {
   }
 
   // ponytail: scans all users per call, fine to ~10k (same as /admin/stats). Rows: best first, ties by created.
-  const board = async () => ((await env.DB.prepare("SELECT uid,handle,name,created,solved FROM users").bind().all()).results || [])
-    .map((r) => ({ uid: r.uid, handle: r.handle, name: r.name, created: r.created, solved: JSON.parse(r.solved || "[]").length }))
+  const avUrl = (id, v) => (v ? `${new URL(req.url).origin}/avatar/${id}.webp?v=${v}` : null);
+  const board = async () => ((await env.DB.prepare("SELECT uid,handle,name,display_name,avatar_v,created,solved FROM users").bind().all()).results || [])
+    .map((r) => ({ uid: r.uid, handle: r.handle, name: r.display_name || r.name, avatar_url: avUrl(r.uid, r.avatar_v), created: r.created, solved: JSON.parse(r.solved || "[]").length }))
     .sort((a, b) => b.solved - a.solved || a.created - b.created);
   const rankOf = (rows, pts) => 1 + rows.filter((r) => r.solved > pts).length;
   if (path === "/leaderboard") {
     const rows = await board();
-    return json({ total_users: rows.length, rows: rows.slice(0, 50).map((r) => ({ rank: rankOf(rows, r.solved), handle: r.handle, first_name: String(r.name || "").split(" ")[0], points: r.solved, solved: r.solved })) });
+    return json({ total_users: rows.length, rows: rows.slice(0, 50).map((r) => ({ rank: rankOf(rows, r.solved), handle: r.handle, first_name: String(r.name || "").split(" ")[0], display_name: r.name || "", avatar_url: r.avatar_url, points: r.solved, solved: r.solved })) });
   }
   if (path === "/me/handle") {
     let b; try { b = JSON.parse(await req.text()); } catch { return json({ error: "bad json" }, 400); }
@@ -114,6 +124,35 @@ export async function handle(req, env, getKeys = fetchKeys) {
     try { await env.DB.prepare("UPDATE users SET handle=? WHERE uid=?").bind(h, uid).run(); }
     catch { return json({ error: "That handle is taken." }, 409); } // lost a race: the unique index refused
     return json({ ok: true, handle: h });
+  }
+
+  if (path === "/me/name") {
+    let b; try { b = JSON.parse(await req.text()); } catch { return json({ error: "bad json" }, 400); }
+    if (typeof b?.name !== "string") return json({ error: "bad name" }, 400);
+    const name = b.name.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+    if (![...name].length || [...name].length > 40) return json({ error: "Name must be 1-40 characters." }, 400);
+    await env.DB.prepare("UPDATE users SET display_name=? WHERE uid=?").bind(name, uid).run();
+    return json({ ok: true, name, display_name: name });
+  }
+
+  if (path === "/me/avatar") {
+    if (req.method === "DELETE") {
+      await env.DB.prepare("DELETE FROM avatars WHERE uid=?").bind(uid).run();
+      await env.DB.prepare("UPDATE users SET avatar_v=NULL WHERE uid=?").bind(uid).run();
+      return json({ ok: true, avatar_url: null });
+    }
+    const buf = await req.arrayBuffer(), x = new Uint8Array(buf), at = (i, s) => [...s].every((c, k) => x[i + k] === c.charCodeAt(0));
+    if (buf.byteLength > MAX_AVATAR) return json({ error: "Picture must be 16 KB or less." }, 413);
+    const type = at(0, "RIFF") && at(8, "WEBP") ? "image/webp" : x[0] === 0xff && x[1] === 0xd8 && x[2] === 0xff ? "image/jpeg" : null;
+    if (!type) return json({ error: "Picture must be WebP or JPEG." }, 415);
+    // ponytail: rolling 24 h window counted in D1; one extra query per upload
+    const n = await env.DB.prepare("SELECT COUNT(*) n FROM avatar_log WHERE uid=? AND at>?").bind(uid, now - DAY).first();
+    if (n.n >= AVATARS_PER_DAY) return json({ error: "You can change your picture 5 times a day. Try again tomorrow." }, 429);
+    await env.DB.prepare("INSERT INTO avatars (uid,img,type,v) VALUES (?,?,?,?) ON CONFLICT(uid) DO UPDATE SET img=excluded.img, type=excluded.type, v=excluded.v").bind(uid, buf, type, now).run();
+    await env.DB.prepare("UPDATE users SET avatar_v=? WHERE uid=?").bind(now, uid).run();
+    await env.DB.prepare("INSERT INTO avatar_log (uid,at) VALUES (?,?)").bind(uid, now).run();
+    await env.DB.prepare("DELETE FROM avatar_log WHERE uid=? AND at<=?").bind(uid, now - DAY).run();
+    return json({ ok: true, avatar_url: avUrl(uid, now) });
   }
 
   if (path === "/me/bio") {
@@ -148,9 +187,9 @@ export async function handle(req, env, getKeys = fetchKeys) {
   }
 
   if (path === "/me") {
-    const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used,handle,bio FROM users WHERE uid=?").bind(uid).first();
+    const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used,handle,bio,display_name,avatar_v FROM users WHERE uid=?").bind(uid).first();
     const solved = JSON.parse(u.solved || "[]"), rows = await board();
-    return json({ uid: u.uid, email: u.email, name: u.name, handle: u.handle, bio: u.bio || "", created: u.created, solved, points: solved.length, rank: rankOf(rows, solved.length), total_users: rows.length, reviews_left: Math.max(0, QUOTA - u.reviews_used), is_admin: isAdmin });
+    return json({ uid: u.uid, email: u.email, name: u.display_name || u.name, display_name: u.display_name || u.name || "", avatar_url: avUrl(uid, u.avatar_v), handle: u.handle, bio: u.bio || "", created: u.created, solved, points: solved.length, rank: rankOf(rows, solved.length), total_users: rows.length, reviews_left: Math.max(0, QUOTA - u.reviews_used), is_admin: isAdmin });
   }
 
   const text = await req.text();
