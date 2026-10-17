@@ -11,7 +11,7 @@ database_id = "REPLACE_AFTER_wrangler_d1_create"
 binding = "AI"
 
 [vars]
-FIREBASE_PROJECT_ID = "REPLACE_WITH_FIREBASE_PROJECT_ID"
+FIREBASE_PROJECT_ID = "nishkam-5d7d2"
 
 [[r2_buckets]]
 binding = "PRIVATE"
