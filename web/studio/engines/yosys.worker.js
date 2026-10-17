@@ -11,7 +11,7 @@ const DONT_USE = ["sdffq", "sdffrnq", "sdffrsnq", "sdffsnq"].flatMap((n) => [1, 
 let mod; // tests set globalThis.__yosysModule to a Node-installed @yowasp/yosys
 const load = () => (mod ||= globalThis.__yosysModule || import(YOSYS_URL));
 
-async function yosys(script, files, { log, progress, raw = () => {} }) {
+export async function yosys(script, files, { log, progress, raw = () => {} }) {
   const { runYosys, Exit } = await load();
   const out = [];
   const sink = (b) => { if (b) { const s = text(b); out.push(s); log(s); } };

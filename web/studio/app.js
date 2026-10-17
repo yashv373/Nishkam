@@ -17,7 +17,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const TABS = ["Editor", "Schematic", "Waveform", "Layout", "GDS", "Timing", "Reports"];
+const TABS = ["Editor", "Schematic", "Verify", "Waveform", "Layout", "GDS", "Timing", "Reports"];
 const project = createProject();
 let selected = "files", running = false, abort = null, jobId = null, runnerInfo = null;
 const state = {};            // stage id -> {st, info, t}
@@ -34,7 +34,7 @@ $("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" 
   window.monaco?.editor.setTheme(root.dataset.theme === "dark" ? "vs-dark" : "vs"); };
 
 // ---------- options (Properties panel) ----------
-const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
+const DEF = { lintEngine: "yosys", simEngine: "icarus", top: "shreg4", tb: "tb_shreg4.v", vMode: "formal", vDepth: 20, vInit: "undef", schematic: "rtl", strategy: "AREA 0", clockPort: "clk",
   clockPeriod: 40, inDelay: "", outDelay: "", loadPf: 0.05, pdEngine: "auto", pdTimeout: 120, dieW: 170, dieH: 170, density: 50, congestion: false };
 const opts = { ...DEF, ...store.get("studio:opts", {}) };
 // studio.html#demo=squeeze-tiny8 : the Practice page's "try it in the browser" link
@@ -47,8 +47,11 @@ if (location.hash === "#demo=squeeze-tiny8") {
 const FIELDS = [
   { k: "lintEngine", label: "Lint engine", t: "select", o: [["yosys", "Yosys"], ["verilator-wasm", "Verilator (wasm)"]], st: ["lint"] },
   { k: "simEngine", label: "Simulation engine", t: "select", o: [["icarus", "Icarus Verilog"], ["verilator", "Verilator (coming soon)", true]], st: ["sim"] },
-  { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "synth", "schematic", "floorplan", "place", "cts", "route", "sta", "signoff"] },
-  { k: "tb", label: "Testbench", t: "file", st: ["sim"] },
+  { k: "top", label: "Top module", t: "text", st: ["lint", "sim", "verify", "synth", "schematic", "floorplan", "place", "cts", "route", "sta", "signoff"] },
+  { k: "tb", label: "Testbench", t: "file", st: ["sim", "verify"] },
+  { k: "vMode", label: "Verify mode", t: "select", o: [["formal", "Formal (prove assertions)"], ["tb", "Testbench (self-checking)"]], st: ["verify"], tip: "Formal: Yosys tries to prove your assert/cover lines for every possible input. Testbench: runs your testbench and checks it passes." },
+  { k: "vDepth", label: "Formal depth (cycles)", t: "number", st: ["verify"], tip: "How many clock cycles to search. Deeper finds bugs that need longer sequences but takes longer." },
+  { k: "vInit", label: "Formal start state", t: "select", o: [["undef", "Unknown (design needs a reset)"], ["zero", "All zeros (no reset needed)"]], st: ["verify"] },
   { k: "strategy", label: "Synthesis strategy", t: "select", o: ["AREA 0", "AREA 1", "AREA 2", "AREA 3", "AREA 4", "DELAY 0", "DELAY 1", "DELAY 2", "DELAY 3", "DELAY 4"], st: ["synth", "floorplan"], rn: true },
   { k: "clockPort", label: "Clock port", t: "text", st: ["synth", "floorplan", "place", "cts", "sta"] },
   { k: "clockPeriod", label: "Clock period (ns)", t: "number", st: ["synth", "floorplan", "cts", "sta"], rn: true },
@@ -199,6 +202,7 @@ async function showTab0(t) {
       host.replaceChildren(); viewers[t] = { inst: await m.mount(host, ctx) };
     } catch (e) { emptyCard(el, t + " viewer not available yet", "The viewer module is not in this build. " + (ctx.source ? "" : "You can still load the demo data once it ships."), true); }
   } else if (t === "Schematic" && !el.firstChild) emptyCard(el, "No schematic yet", "Run Synthesis and then Schematic.", false);
+  else if (t === "Verify" && !el.firstChild) emptyCard(el, "No verification yet", "Run Verify. Formal mode proves the assert and cover lines in your design; Testbench mode runs a self-checking testbench.", false, ["Run Verify", () => start(plan("one", "verify"))]);
   else if (t === "Waveform" && !el.firstChild) emptyCard(el, "No waveform yet", "Run Simulation. The testbench must write a VCD with $dumpfile.", false);
   if (t === "Editor") editor?.layout();
 }
@@ -405,6 +409,31 @@ function staShow(r, id) {
   if (id === "sta") { regBrowser(paths); showTab("Timing"); }
   else { for (const v of Object.values(viewers)) v.inst.update?.(ctx); bnote(curTab); }
 }
+// Verify results: one row per property (or one for the testbench), green when fine, red when not.
+const VWORD = { proven: "PROVEN", failed: "FAILED", unknown: "UNKNOWN", covered: "REACHED", notcovered: "NOT REACHED", error: "ERROR" };
+const VCLS = { proven: "ok", covered: "ok", failed: "bad", error: "bad", unknown: "mid", notcovered: "mid" };
+async function showVerify(r) {
+  const el = view("Verify"), sm = r.summary || {}; el.replaceChildren();
+  const box = h("div", "vbox"); el.append(box);
+  if (sm.skipped) return emptyCard(el, "Nothing to check", "No assert or cover lines were found. Add some to your design (see the fifo (verify) example), then run Verify again.");
+  if (!sm.results) return emptyCard(el, "Verify could not run", sm.error || "See the Console for details.");
+  const formal = sm.mode === "formal", res = sm.results, bad = res.filter((x) => VCLS[x.status] === "bad").length;
+  box.append(h("div", "vhead " + (bad ? "bad" : "ok"), formal
+    ? (bad ? `${bad} of ${res.length} checks failed` : `All ${res.length} checks done, none failed`) + ` (searched ${sm.depth} cycles, start state: ${sm.init === "zero" ? "all zeros" : "unknown"})`
+    : res[0]?.status === "proven" ? "Testbench PASSED" : `Testbench FAILED (${sm.errors} error${sm.errors === 1 ? "" : "s"})`));
+  box.append(h("p", "vhelp", formal
+    ? "PROVEN: true for every possible input, for ever. FAILED: the tool found inputs that break it, shown as a waveform. UNKNOWN: no failure found, but not proven for all time (try more depth). REACHED / NOT REACHED: a cover line, is that situation possible?"
+    : "The testbench ran in Icarus. It fails if it prints FAIL, or calls $error or $fatal."));
+  for (const x of res) {
+    const row = h("div", "vrow " + VCLS[x.status]); row.append(h("b", "vstat", VWORD[x.status] || x.status), h("span", "vname", x.name), h("span", "vdet", x.detail || ""));
+    if (x.file && x.line) row.append(Object.assign(h("button", "", `line ${x.line}`), { onclick: () => gotoSrc([{ file: x.file, l1: x.line, l2: x.line }]) }));
+    if (x.vcd && r.files?.[x.vcd]) row.append(Object.assign(h("button", "", "View waveform"), { onclick: () => showWave(r.files[x.vcd]) }));
+    box.append(row);
+  }
+  if (sm.mode === "tb" && sm.stdout) box.append(h("pre", "vout", sm.stdout));
+  const first = res.find((x) => x.status === "failed" && x.vcd && r.files?.[x.vcd]);
+  if (first) await showWave(r.files[first.vcd]);   // a failing trace opens in Surfer by itself
+}
 async function onResult(id, r) {
   for (const [p, d] of Object.entries(r.files || {})) { outputs[p] = d; if (!artifacts.some((a) => a.name === p)) artifacts.push({ name: p, get: async () => outputs[p] }); }
   const sm = r.summary || {};
@@ -421,6 +450,7 @@ async function onResult(id, r) {
     else if (sm.tooLarge) { cons.log(id, `WARNING: ${sm.tooLarge} cells is too many to draw (limit ${MAX_SCHEMATIC_CELLS}). Try the RTL view.`);
       emptyCard(view("Schematic"), "Too large to draw", `${sm.tooLarge} cells (limit ${MAX_SCHEMATIC_CELLS}). Use the RTL view or a smaller top module.`); showTab("Schematic"); }
   }
+  if (id === "verify") await showVerify(r);
   if (id === "sim") {
     const vcd = Object.entries(r.files || {}).find(([p]) => p.endsWith(".vcd"));
     if (!vcd) return emptyCard(view("Waveform"), "No waveform", "The testbench did not write a VCD. Add $dumpfile and $dumpvars.", false);
@@ -528,7 +558,9 @@ async function localStage(id, io) {
   return out;
 }
 // Which project files a stage reads: no testbenches, except the chosen one for simulation.
-const filesFor = (id) => Object.fromEntries(Object.entries(project.all()).filter(([n]) => !project.isTb(n) || (byId(id).src === "sim" && n === opts.tb)));
+const isProps = (n) => /_props\.s?vh?$/i.test(n);   // property files only the Verify stage reads
+const filesFor = (id) => { const src = byId(id).src, useTb = src === "sim" || (src === "verify" && opts.vMode === "tb");
+  return Object.fromEntries(Object.entries(project.all()).filter(([n]) => (!project.isTb(n) || (useTb && n === opts.tb)) && (src === "verify" || !isProps(n)))); };
 
 // ---------- runner ----------
 async function checkRunner() {
@@ -583,6 +615,7 @@ async function runnerJob({ from, to, ids }) {
 async function start(ids) {
   if (running || !ids.length) return;
   hideGuide();
+  if (!project.list().length) { cons.log("run", "ERROR: The project has no files. Open Examples and load one, or upload your own."); tabEx = true; showTab("Editor"); drawFileBar(); return; }
   running = true; abort = new AbortController(); planned = ids; frac = 0; applyFx();
   $("stop").disabled = false; ["runAll", "runTo", "runOne"].forEach((b) => $(b).disabled = true);
   syncFromEditor(); cons.startTimer();
@@ -637,7 +670,7 @@ addEventListener("keydown", (e) => {
 // Open the file that defines the top module first (falls back to the first file).
 let editor, openFile = project.list().find((n) => new RegExp(String.raw`\bmodule\s+${opts.top}\b`).test(project.get(n) || "")) || project.list()[0];
 const models = {};
-let staleLater = false, tabEx = false, undo = null;
+let staleLater = false, tabEx = !project.list().length, undo = null;   // empty project: open on Examples
 function swapProject(name, files, o, msg) {
   project.replace(files, name); Object.assign(opts, o); store.set("studio:opts", opts);
   editor?.setModel(null); for (const k in models) { models[k].dispose(); delete models[k]; }
@@ -677,7 +710,7 @@ function drawFileBar() {
   bar.append(up);
 }
 function openF(n) {
-  openFile = n; drawFileBar(); if (!editor) return;
+  openFile = n; drawFileBar(); if (!editor || !n) return;
   models[n] ||= monaco.editor.createModel(project.get(n), "systemverilog");
   editor.setModel(models[n]);
 }

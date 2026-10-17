@@ -1,7 +1,7 @@
 import { STAGES, GROUPS } from "./stages.js";
 const ICON = { idle: "○", queued: "◔", running: "", passed: "✓", warn: "!", failed: "✕", unavailable: "–", stale: "●" };
 const LABEL = { idle: "not run", queued: "queued", running: "running", passed: "passed", warn: "warnings", failed: "failed", unavailable: "unavailable", stale: "stale" };
-export const HINT = { sim: "Usually a few seconds. The first run downloads the simulator.", synth: "Usually 5 to 15 seconds. The first run downloads Yosys (about 70 MB).",
+export const HINT = { verify: "Usually a few seconds per property. The first run downloads Yosys (about 70 MB).", sim: "Usually a few seconds. The first run downloads the simulator.", synth: "Usually 5 to 15 seconds. The first run downloads Yosys (about 70 MB).",
   place: "Can take a few seconds to a minute.", route: "Can take a few seconds to a minute.", sta: "Usually a few seconds.", signoff: "Usually 5 to 15 seconds. The first run downloads Magic and Netgen." };
 // state: {id: {st, info, t}}  cb: {select, run, runTo, runFrom}
 export function renderNavigator(el, state, selected, cb, runnerOn) {

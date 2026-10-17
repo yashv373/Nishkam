@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { plan, batches, runStages } from "./stages.js";
-assert.deepEqual(plan("to", "synth"), ["lint", "sim", "synth"]);
+assert.deepEqual(plan("to", "synth"), ["lint", "sim", "verify", "synth"]);
 assert.deepEqual(plan("one", "cts"), ["cts"]);
 assert.deepEqual(plan("one", "files"), []);
-assert.equal(plan("all").length, 10);
+assert.equal(plan("all").length, 11);
 assert.deepEqual(plan("from", "route"), ["route", "sta", "signoff"]);
 assert.deepEqual(batches(["lint", "floorplan", "place", "sta"]).map((b) => b.ids.join("+")), ["lint", "floorplan+place+sta"]);
 const mk = (hasRunner, failId) => {
