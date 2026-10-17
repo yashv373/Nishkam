@@ -102,7 +102,7 @@ assert.equal((await call("/me", null, await mint({ sub: "newbie" }))).status, 40
 assert.equal((await call("/me")).status, 200, "existing uid still fine");
 // (c) private deck from a fake R2
 let deck = "<h1>deck</h1>";
-env.PRIVATE = { get: async (k) => (k === "pitch.html" && deck != null ? { text: async () => deck } : null) };
+env.PRIVATE = { get: async (k) => (k === "pitch.html" && deck != null ? deck : null) };
 const user = await mint({ sub: "u1" });
 assert.equal((await call("/admin/deck", null, user)).status, 403, "non-admin deck");
 const dr = await call("/admin/deck", null, adm);

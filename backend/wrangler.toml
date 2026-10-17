@@ -5,7 +5,7 @@ compatibility_date = "2025-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "nishkam"
-database_id = "REPLACE_AFTER_wrangler_d1_create"
+database_id = "08a47114-dd91-40c2-9bab-4f128d265386"
 
 [ai]
 binding = "AI"
@@ -13,6 +13,6 @@ binding = "AI"
 [vars]
 FIREBASE_PROJECT_ID = "nishkam-5d7d2"
 
-[[r2_buckets]]
+[[kv_namespaces]]
 binding = "PRIVATE"
-bucket_name = "nishkam-private"
+id = "861ee16ecbc740ac8bbb536a168d606e"

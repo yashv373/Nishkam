@@ -77,7 +77,7 @@ export async function handle(req, env, getKeys = fetchKeys) {
   if (path === "/admin/deck") {
     const o = await env.PRIVATE.get("pitch.html");
     if (!o) return json({ error: "no deck uploaded" }, 404);
-    return new Response(await o.text(), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; script-src 'unsafe-inline'; frame-ancestors 'none'", ...cors } });
+    return new Response(o, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; script-src 'unsafe-inline'; frame-ancestors 'none'", ...cors } });
   }
   if (await env.DB.prepare("SELECT uid FROM users WHERE uid=?").bind(uid).first())
     await env.DB.prepare("UPDATE users SET email=?, name=?, last_seen=? WHERE uid=?").bind(claims.email || "", claims.name || "", now, uid).run();
