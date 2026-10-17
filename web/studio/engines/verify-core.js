@@ -25,13 +25,13 @@ export function modelFor(top, mod, t) {
   const cells = {}; let max = 0;
   const scan = (b) => { for (const x of b || []) if (typeof x === "number" && x > max) max = x; };
   for (const w of Object.values(mod.netnames || {})) scan(w.bits);
-  for (const c of Object.values(mod.cells)) for (const b of Object.values(c.connections || {})) scan(b);
-  for (const [n, c] of Object.entries(mod.cells)) if (c.type !== "$assert" && c.type !== "$cover") cells[n] = c;
+  for (const c of Object.values(mod.cells || {})) for (const b of Object.values(c.connections || {})) scan(b);
+  for (const [n, c] of Object.entries(mod.cells || {})) if (c.type !== "$assert" && c.type !== "$cover") cells[n] = c;
   const c = mod.cells[t.name];
   if (t.kind === "assert") cells[t.name] = c;
   else {
     const n1 = max + 1, n2 = max + 2;
-    cells.$vf_and = { type: "$logic_and", parameters: { A_SIGNED: 0, A_WIDTH: 1, B_SIGNED: 0, B_WIDTH: 1, Y_WIDTH: 1 }, port_directions: { A: "input", B: "input", Y: "output" }, connections: { A: c.connections.A.slice(0, 1), B: c.connections.EN, Y: [n1] } };
+    cells.$vf_and = { type: "$logic_and", parameters: { A_SIGNED: 0, A_WIDTH: 1, B_SIGNED: 0, B_WIDTH: 1, Y_WIDTH: 1 }, port_directions: { A: "input", B: "input", Y: "output" }, connections: { A: c.connections.A.slice(0, 1), B: c.connections.EN || ["1"], Y: [n1] } };
     cells.$vf_not = { type: "$logic_not", parameters: { A_SIGNED: 0, A_WIDTH: 1, Y_WIDTH: 1 }, port_directions: { A: "input", Y: "output" }, connections: { A: [n1], Y: [n2] } };
     cells[t.name] = { ...c, type: "$assert", connections: { A: [n2], EN: ["1"] }, port_directions: { A: "input", EN: "input" } };
   }

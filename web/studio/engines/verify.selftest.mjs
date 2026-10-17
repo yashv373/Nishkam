@@ -25,4 +25,7 @@ await t("testbench: FAIL counts $error lines", (r) => !r.j.pass && r.j.errors.le
 await t("testbench: VCD injected when the testbench has no $dumpfile", (r) => r.j.pass && Object.keys(r.files).some((p) => /\.vcd$/.test(p)),
   async () => { const files = { "d.v": "module d(output y); assign y = 1; endmodule", "tb_d.v": "module tb_d; wire y; d u(.y(y)); initial begin #5; if (y !== 1) $fatal(1, \"bad\"); $display(\"PASS\"); $finish; end endmodule" };
     const r = await I.handle({ files: C.injectDump(files, "tb_d.v") }, noop); return { ...r, j: C.judgeTb(r) }; });
+await t("cover with no EN connection does not crash modelFor", (r) => r === true, async () => {
+  const m = { cells: { c: { type: "$cover", attributes: {}, connections: { A: [2] } } }, netnames: {} };
+  const out = JSON.parse(C.modelFor("x", m, { name: "c", kind: "cover" })); return out.modules.x.cells.$vf_and.connections.B[0] === "1"; });
 process.exit(fail ? 1 : 0);

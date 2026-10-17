@@ -195,9 +195,10 @@ export async function runStages(ids, deps) {
       for (const m of r?.summary?.messages || []) if (typeof m?.text === "string" && !seen.includes(m.text))   // tool messages the engine did not print must still reach the Console
         deps.onLog(id, (m.severity === "error" ? "ERROR: " : "WARNING: ") + (m.file ? m.file + (m.line ? ":" + m.line : "") + ": " : "") + m.text);
       deps.onResult?.(id, r);
-      if (!r.ok) ok = false;
       const sm = r.summary || {}, w = sm.warnings;
-      if (!r.ok) mark([id], "failed", sm.error || (sm.errors ? sm.errors + " errors" : undefined) || (st.src === "verify" ? (sm.results || []).filter((x) => x.status === "failed" || x.status === "error").length + " failed" : undefined));
+      if (!r.ok) ok = false;
+      const nFail = st.src === "verify" ? (sm.results || []).filter((x) => x.status === "failed" || x.status === "error").length : 0;
+      if (!r.ok || nFail) mark([id], "failed", sm.error || (sm.errors ? sm.errors + " errors" : undefined) || (st.src === "verify" ? (nFail ? nFail + " failed" : "verify did not run") : undefined));
       else if (sm.skipped) mark([id], "unavailable", "skipped: " + sm.skipped);
       else if (w > 0 || /FAIL/.test(sm.stdout || "")) mark([id], "warn", w > 0 ? w + "W" : "tb FAIL");
       else mark([id], "passed");
