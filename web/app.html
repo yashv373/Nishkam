@@ -150,7 +150,7 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
   <a class="brand" href="./" style="color:inherit;text-decoration:none" aria-label="Nishkam home"><span class="logotype"></span></a>
   <span class="spacer"></span>
   <span id="pts" class="pill" hidden></span>
-  <span class="tipwrap nophone"><a class="pill" href="studio.html" aria-describedby="studiotip" style="text-decoration:none">Open Studio</a><span id="studiotip" role="tooltip" class="tip">Studio needs an access key.</span></span>
+  <a class="pill nophone" href="studio.html" style="text-decoration:none">Open Studio</a>
   <button id="runnerBtn" class="pill nophone"><span class="dot"></span><span id="runnerText">Local runner: off</span><small> (work in progress)</small></button>
   <span id="auth" hidden></span>
 </header>
@@ -191,6 +191,47 @@ dialog pre { background: var(--code-bg); padding: 10px; border-radius: 8px; whit
 if(!t){try{sessionStorage.setItem(k,'1')}catch(e){}Promise.all(performance.getEntriesByType('resource').filter(function(e){return/\.m?js(\?|$)/.test(e.name)&&e.name.indexOf(location.origin)==0}).map(function(e){return fetch(e.name,{cache:'reload'}).catch(function(){})})).then(function(){location.reload()});return}
 var d=document.createElement('div');d.style.cssText='position:fixed;inset:0;display:grid;place-items:center;background:#000;color:#fff;font:16px sans-serif;text-align:center;padding:24px;z-index:99';d.textContent='Nishkam was just updated. Reload the page (Ctrl+Shift+R).';document.body.appendChild(d)}
 addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(e.message)&&(/^module import failed/.test(e.message)||(e.filename||'').indexOf(location.origin)==0))bad()});addEventListener('load',function(){setTimeout(function(){if(window.__nkBoot)try{sessionStorage.removeItem('nk:reloaded')}catch(e){}},9000)})})();</script>
-<script type="module" src="app.js"></script>
+<div id="gate" hidden><form class="gatecard" id="gateForm" autocomplete="off">
+  <span class="logotype" role="img" aria-label="Nishkam" style="height:28px"></span>
+  <h1>Nishkam is in early access.</h1>
+  <p>Enter your access key to practise.</p>
+  <input id="gateKey" type="text" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-label="Access key" aria-describedby="gateErr">
+  <button class="gbtn" type="submit">Enter</button>
+  <p id="gateErr" role="alert"></p>
+  <p class="gatesub">Currently in development. Want a sneak peek?</p>
+  <a class="gbtn2" href="mailto:nishkam.world@gmail.com?subject=Nishkam%20access%20key%20request&body=Hi%20Nishkam%20team%2C%0A%0AName%3A%0ACollege%20/%20company%3A%0AWhat%20I%20want%20to%20use%20Nishkam%20for%3A%0AWhy%20I%20should%20get%20an%20access%20key%3A%0A">Request an access key</a>
+  <p class="gatecap">Write to us and tell us why you deserve an access key!</p>
+</form></div>
+<div id="gateToast" hidden role="status"></div>
+<style>
+#gate{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:#000;padding:16px}
+#gate[hidden],#gateToast[hidden]{display:none}
+.gatecard{display:flex;flex-direction:column;align-items:center;gap:12px;max-width:380px;width:100%;padding:28px 24px;text-align:center;border:1px solid rgba(255,255,255,.16);border-radius:16px;background:rgba(28,28,30,.7);backdrop-filter:blur(28px) saturate(180%);color:#fff}
+.gatecard h1{font-size:20px;margin:0}.gatecard p{margin:0;color:#c8cbe0}
+.gatecard input{width:100%;height:44px;text-align:center;font-size:18px;letter-spacing:.2em;border-radius:12px;border:1px solid #6b74b8;background:#05071a;color:#fff}
+.gatecard input:focus-visible,.gbtn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.gbtn{background:#1430ff;color:#fff;border:0;border-radius:12px;height:44px;min-width:120px;padding:0 28px;cursor:pointer;font:inherit}
+.gatesub{margin-top:8px!important}.gatecap{font-size:12px}.gbtn2{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);backdrop-filter:blur(28px) saturate(180%%);color:#fff;text-decoration:none;font:14px sans-serif;white-space:nowrap}.gbtn2:focus-visible{outline:2px solid #fff;outline-offset:2px}
+#gateErr{color:#ff9a9a!important;min-height:1.2em}
+#gateToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;padding:10px 18px;border-radius:12px;background:#1430ff;color:#fff;font:14px sans-serif}
+</style>
+<script type="module">
+// Same client-side gate as Studio (studio/gate.js, same stored key). The practice code loads only after a good key.
+import { check, remember, remembered } from "./studio/gate.js";
+const boot = () => { document.querySelector("main").inert = false; import("./app.js").catch((e) => dispatchEvent(new ErrorEvent("error", { message: "module import failed: " + e.message }))); };
+const $ = (i) => document.getElementById(i);
+if (remembered()) boot();
+else {
+  document.querySelector("main").inert = true;
+  $("gate").hidden = false; $("gateKey").focus();
+  $("gateForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const k = $("gateKey").value, m = await check(k);
+    if (!m) { $("gateErr").textContent = "That key isn't valid. Check it and try again."; return; }
+    await remember(k); $("gate").hidden = true; $("gateToast").textContent = m; $("gateToast").hidden = false;
+    setTimeout(() => { $("gateToast").hidden = true; }, 3000); boot();
+  };
+}
+</script>
 </body>
 </html>

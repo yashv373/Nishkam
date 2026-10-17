@@ -126,6 +126,9 @@ addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(
   <input id="gateKey" type="text" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-label="Access key" autofocus>
   <button class="pbtn pri" type="submit">Enter</button>
   <p id="gateErr" role="alert"></p>
+  <p class="gatesub">Currently in development. Want a sneak peek?</p>
+  <a class="gbtn2" href="mailto:nishkam.world@gmail.com?subject=Nishkam%20access%20key%20request&body=Hi%20Nishkam%20team%2C%0A%0AName%3A%0ACollege%20/%20company%3A%0AWhat%20I%20want%20to%20use%20Nishkam%20for%3A%0AWhy%20I%20should%20get%20an%20access%20key%3A%0A">Request an access key</a>
+  <p class="gatecap">Write to us and tell us why you deserve an access key!</p>
 </form></div>
 <div id="gateToast" hidden></div>
 <style>
@@ -135,6 +138,7 @@ addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(
 .gatecard h1{font-size:20px;margin:0}.gatecard p{margin:0;color:#9aa3d6}
 .gatecard input{width:100%;height:42px;text-align:center;font-size:18px;letter-spacing:.2em;border-radius:12px;border:1px solid #2a3070;background:#05071a;color:#fff}
 .gatecard .pbtn{background:#1430ff;color:#fff;border:0;border-radius:12px;height:40px;padding:0 28px;cursor:pointer}
+.gatesub{margin-top:8px!important}.gatecap{font-size:12px}.gbtn2{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 20px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);backdrop-filter:blur(28px) saturate(180%%);color:#fff;text-decoration:none;font:14px sans-serif;white-space:nowrap}.gbtn2:focus-visible{outline:2px solid #fff;outline-offset:2px}
 #gateErr{color:#ff8a8a!important;min-height:1.2em}
 #gateToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:70;padding:10px 18px;border-radius:12px;background:#1430ff;color:#fff;font:14px sans-serif}
 </style>
