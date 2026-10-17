@@ -320,7 +320,7 @@ function showAuth() {
   const box = $("auth");
   if (fbUser) {
     const img = fbUser.photoURL ? `<img src="${esc(fbUser.photoURL)}" alt="" width="22" height="22" style="border-radius:50%" referrerpolicy="no-referrer">` : `<span aria-hidden="true">●</span>`;
-    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}${me ? ` · ${me.points} point${me.points === 1 ? "" : "s"}` : ""}</span></button>${me?.is_admin ? '<a class="pill" href="admin.html" style="text-decoration:none;background:#1430ff;color:#fff;font-weight:600">Admin</a>' : ""}${menuOpen ? `<button class="pill" id="out">Sign out</button>` : ""}`;
+    box.innerHTML = `<button class="pill" id="signout" title="Click to sign out">${img}<span class="stext"> ${esc(fbUser.displayName || fbUser.email || "Signed in")}${me ? ` · ${me.points} point${me.points === 1 ? "" : "s"}` : ""}</span></button>${me?.is_admin ? '<a class="pill" href="admin.html" style="text-decoration:none;background:#1430ff;color:#fff;font-weight:600">Admin</a>' : ""}${menuOpen ? `<a class="pill" href="profile.html" style="text-decoration:none">My profile</a><button class="pill" id="out">Sign out</button>` : ""}`;
     $("signout").onclick = () => { menuOpen = !menuOpen; showAuth(); };
     if ($("out")) $("out").onclick = () => auth.mod.signOut(auth.auth);
   } else {
