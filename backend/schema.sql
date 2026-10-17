@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS users (
   uid TEXT PRIMARY KEY,
-  email TEXT, name TEXT, handle TEXT, created INTEGER NOT NULL,
+  email TEXT, name TEXT, handle TEXT, display_name TEXT, avatar_v INTEGER, bio TEXT, created INTEGER NOT NULL,
   last_seen INTEGER NOT NULL DEFAULT 0,
   solved TEXT NOT NULL DEFAULT '[]',          -- JSON list of problem ids; points = its length
   code TEXT NOT NULL DEFAULT '{}',            -- JSON {problemId: [last 2 {at, files}]}
@@ -9,3 +9,5 @@ CREATE TABLE IF NOT EXISTS reviews (uid TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at INTEGER);
 CREATE TABLE IF NOT EXISTS admin_log (who TEXT NOT NULL, what TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS users_handle ON users(handle);
+CREATE TABLE IF NOT EXISTS avatars (uid TEXT PRIMARY KEY, img BLOB NOT NULL, type TEXT NOT NULL, v INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS avatar_log (uid TEXT NOT NULL, at INTEGER NOT NULL);

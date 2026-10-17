@@ -25,7 +25,7 @@ await rejects(await mint({ auth_time: NOW + 9999 }), "auth_time in future");
 await rejects(await mint({}, other.privateKey), "signature");
 
 // (b) quota, flags, admin against a tiny fake D1 (only the statements the worker uses)
-const rows = new Map(), flags = {}, log = [], reviews = [];
+const avs = new Map(), alog = [], rows = new Map(), flags = {}, log = [], reviews = [];
 const ok = { meta: { changes: 1 } };
 const db = { prepare: (sql) => ({ bind: (...a) => ({
   run: async () => {
@@ -36,6 +36,13 @@ const db = { prepare: (sql) => ({ bind: (...a) => ({
     if (sql.startsWith("UPDATE users SET solved")) { Object.assign(rows.get(a[2]), { solved: a[0], code: a[1] }); return ok; }
     if (sql.startsWith("UPDATE users SET bio")) { rows.get(a[1]).bio = a[0]; return ok; }
     if (sql.startsWith("UPDATE users SET handle")) { if ([...rows.values()].some((r) => r.handle === a[0] && r.uid !== a[1])) throw new Error("UNIQUE"); rows.get(a[1]).handle = a[0]; return ok; }
+    if (sql.startsWith("UPDATE users SET display_name")) { rows.get(a[1]).display_name = a[0]; return ok; }
+    if (sql.startsWith("INSERT INTO avatars")) { avs.set(a[0], { img: Array.from(new Uint8Array(a[1])), type: a[2], v: a[3] }); return ok; }
+    if (sql.startsWith("UPDATE users SET avatar_v=NULL")) { rows.get(a[0]).avatar_v = null; return ok; }
+    if (sql.startsWith("UPDATE users SET avatar_v")) { rows.get(a[1]).avatar_v = a[0]; return ok; }
+    if (sql.startsWith("DELETE FROM avatars")) { avs.delete(a[0]); return ok; }
+    if (sql.startsWith("INSERT INTO avatar_log")) { alog.push({ uid: a[0], at: a[1] }); return ok; }
+    if (sql.startsWith("DELETE FROM avatar_log")) { return ok; }
     if (sql.startsWith("INSERT INTO flags")) { flags[a[0]] = a[1]; return ok; }
     if (sql.startsWith("INSERT INTO admin_log")) { log.push({ who: a[0], what: a[1], at: a[2] }); return ok; }
     if (sql.startsWith("INSERT INTO reviews")) { reviews.push(a[1]); return ok; }
@@ -43,6 +50,8 @@ const db = { prepare: (sql) => ({ bind: (...a) => ({
   },
   first: async () => {
     if (sql.includes("COUNT(*) total, SUM(created")) { const r = [...rows.values()]; return { total: r.length, d1: r.length, d7: r.length, d30: r.length, active7: r.length }; }
+    if (sql.includes("FROM avatars")) return avs.get(a[0]) || null;
+    if (sql.includes("FROM avatar_log")) return { n: alog.filter((l) => l.uid === a[0] && l.at > a[1]).length };
     if (sql.includes("FROM reviews")) return { total: reviews.length, today: reviews.length };
     if (sql.includes("WHERE handle=")) return [...rows.values()].find((r) => r.handle === a[0]);
     return rows.get(a[0]);
@@ -54,6 +63,7 @@ const aiText = "Your q is wrong on cycle 3.\n```verilog\nassign q = d;\n```\nass
 const env = { DB: db, FIREBASE_PROJECT_ID: PID, ADMIN_EMAILS: "Boss@x.io, other@x.io", AI: { run: async () => { if (aiFail) throw new Error("down"); return { response: aiText }; } } };
 const call = async (path, body, tok, origin = "http://localhost:8000") => handle(new Request("https://x" + path, {
   method: body ? "POST" : "GET", headers: { Origin: origin, Authorization: "Bearer " + (tok ?? await mint()) }, body: body && JSON.stringify(body) }), env, async () => keys);
+const raw = (path, method, bytes, tok) => handle(new Request("https://x" + path, { method, headers: { Origin: "http://localhost:8000", Authorization: "Bearer " + (tok ?? "") }, body: bytes }), env, async () => keys);
 const rev = { problemId: "shreg4", problemText: "p", userRtl: "r", cycleTable: "c" };
 
 assert.equal((await call("/me", null, "garbage")).status, 401);
@@ -74,6 +84,47 @@ assert.equal((await call("/me/bio", { bio: 5 })).status, 400);
 assert.equal((await call("/me/bio", { bio: "x".repeat(160) })).status, 200, "160 is fine");
 assert.equal((await (await call("/me/bio", { bio: "  RTL\u0000 and\nSTA \u0007 " })).json()).bio, "RTL  and STA", "control chars stripped");
 assert.equal((await (await call("/me")).json()).bio, "RTL  and STA", "bio returned by /me");
+// display name: 1-40 chars, trimmed, control chars stripped; overrides the Google name
+assert.equal((await call("/me/name", { name: "   " })).status, 400, "blank name");
+assert.equal((await call("/me/name", { name: "\u0001\u0002" })).status, 400, "only control chars");
+assert.equal((await call("/me/name", { name: "n".repeat(41) })).status, 400, "41 chars");
+assert.equal((await call("/me/name", { name: 5 })).status, 400);
+assert.equal((await call("/me/name", { name: "n".repeat(40) })).status, 200, "40 is fine");
+assert.equal((await (await call("/me/name", { name: "  Zed\u0001 Q \n" })).json()).name, "Zed Q");
+const meN = await (await call("/me")).json();
+assert.deepEqual([meN.name, meN.display_name, meN.avatar_url], ["Zed Q", "Zed Q", null], "/me uses display name; no avatar yet");
+// avatar: WebP or JPEG, <= 16 KB, 5 changes a day, public GET with cache headers
+const pic = (head, n) => { const b = new Uint8Array(n); b.set(head); return b; };
+const RW = [...Buffer.from("RIFF"), 0, 0, 0, 0, ...Buffer.from("WEBP")];
+const webp = pic(RW, 3000), jpeg = pic([0xff, 0xd8, 0xff, 0xe0], 2000);
+const mint1 = await mint();
+const postT = (b) => raw("/me/avatar", "POST", b, mint1);
+assert.equal((await postT(webp)).status, 200, "webp accepted");
+const up = await postT(jpeg); assert.equal(up.status, 200, "jpeg accepted");
+const av1 = (await up.json()).avatar_url; assert.match(av1, /^https:\/\/x\/avatar\/u1\.webp\?v=\d+$/);
+assert.equal((await postT(pic(RW, 16 * 1024))).status, 200, "exactly 16 KB ok");
+assert.equal((await postT(pic(RW, 16 * 1024 + 1))).status, 413, ">16 KB");
+assert.equal((await postT(pic([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10], 500))).status, 415, "PNG");
+assert.equal((await postT(crypto.getRandomValues(new Uint8Array(500)).fill(7, 0, 4))).status, 415, "random bytes");
+assert.equal((await postT(new Uint8Array(0))).status, 415, "empty");
+assert.equal((await raw("/me/avatar", "POST", webp, "garbage")).status, 401, "needs sign-in");
+assert.equal((await postT(webp)).status, 200); assert.equal((await postT(jpeg)).status, 200, "5th is fine"); assert.equal((await postT(webp)).status, 429, "6th change in a day");
+const g = await raw("/avatar/u1.webp", "GET", undefined, "");
+assert.equal(g.status, 200, "public: no sign-in needed");
+assert.equal(g.headers.get("content-type"), "image/jpeg", "type follows the magic bytes of the last upload");
+assert.match(g.headers.get("cache-control"), /max-age=86400/);
+assert.deepEqual([...new Uint8Array(await g.arrayBuffer())].slice(0, 4), [0xff, 0xd8, 0xff, 0xe0], "bytes round trip");
+const etag = g.headers.get("etag"); assert.ok(etag);
+assert.equal((await handle(new Request("https://x/avatar/u1.webp", { headers: { "If-None-Match": etag } }), env, async () => keys)).status, 304, "etag");
+assert.equal((await raw("/avatar/nobody.webp", "GET", undefined, "")).status, 404);
+assert.match((await (await call("/me")).json()).avatar_url, /avatar\/u1\.webp\?v=/);
+const lbA = await (await call("/leaderboard")).json();
+assert.deepEqual([lbA.rows[0].display_name, lbA.rows[0].first_name], ["Zed Q", "Zed"], "leaderboard uses display name");
+assert.match(lbA.rows[0].avatar_url, /avatar\/u1\.webp/);
+assert.ok(!/@|email/.test(JSON.stringify(lbA)), "no emails");
+assert.equal((await raw("/me/avatar", "DELETE", undefined, mint1)).status, 200);
+assert.equal((await raw("/avatar/u1.webp", "GET", undefined, "")).status, 404, "deleted");
+assert.equal((await (await call("/me")).json()).avatar_url, null);
 // old solve/points path: points = distinct solves, last 2 code versions kept
 for (const v of ["a", "b", "c"]) await call("/solve", { problem: "shreg4", files: { "t.v": v } });
 await call("/solve", { problem: "adder2", files: {} });
