@@ -239,7 +239,7 @@ function physRows() {
     const dbu = +(((() => { const x = outputs[`browser/place/${p.top}.def`] || ""; return typeof x === "string" ? x : new TextDecoder().decode(x); })().match(/UNITS DISTANCE MICRONS (\d+)/) || [])[1] || 0);
     const d = (p.die.match(/-?\d+/g) || []).map(Number), um = (v) => (dbu ? (v / dbu).toFixed(1) : v);
     rows.push(["Components (cells + fill)", p.components], ["Die", d.length === 4 ? `${um(d[2] - d[0])} x ${um(d[3] - d[1])} ${dbu ? "µm" : "DEF units"}` : "n/a"], ["Placement time", ms(p)]);
-    if (p.fit) rows.push(["LibreLane fit (estimate)", `${Math.round(p.fit.util * 100)}% of the core${p.fit.fail ? ": would STOP in LibreLane (GPL-0301)" : ""}`]);
+    if (p.fit) rows.push(["LibreLane fit (estimate)", `${Math.round(p.fit.util * 100)}% of the core${p.fit.fail ? ". LibreLane would stop: the die is too small for it (GPL-0301)" : ""}`]);
   }
   if (r) rows.push(["Failed nets", r.failedNets], ["Routing time", ms(r)]);
   if (g) rows.push(["DRC error tiles", g.drcErrors], ["  inside library cells", g.drcInCells], ["  from the layout", g.drcFromLayout], ["GDS size", (g.gdsBytes / 1024).toFixed(1) + " KB"], ["Magic time", ms(g)]);
@@ -555,8 +555,8 @@ async function localStage(id, io) {
   if (r.ok) PD[id === "signoff" ? "magic" : id] = id === "cts" ? { [top + ".def"]: r.files[top + ".def"], [top + "_cts.v"]: r.files[top + "_cts.v"] } : r.files;
   if (id === "place") delete PD.cts;   // a new placement makes the old clock tree stale
   if (id === "place" && r.ok) {   // the browser die ignores the cells LibreLane adds: say how full it would be there (#21)
-    const df = outputs[`browser/place/${top}.def`] || "", dt = typeof df === "string" ? df : new TextDecoder().decode(df);
-    const dbu = +((dt.match(/UNITS DISTANCE MICRONS (d+)/) || [])[1] || 0), d = ((r.summary?.die || "").match(/-?d+/g) || []).map(Number);
+    const df = r.files?.[top + ".def"] || "", dt = typeof df === "string" ? df : new TextDecoder().decode(df);
+    const dbu = +((dt.match(/UNITS DISTANCE MICRONS (\d+)/) || [])[1] || 0), d = ((r.summary?.die || "").match(/-?\d+/g) || []).map(Number);
     if (dbu && d.length === 4) r.summary.fit = await fitNote((d[2] - d[0]) / dbu, (d[3] - d[1]) / dbu, io.onLog);
   }
   const out = { ...r, files: pre(id, r.files) };
