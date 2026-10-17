@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changelog · Nishkam</title>
+<meta name="description" content="What changed on Nishkam, newest first.">
+<link rel="icon" href="brand/favicon.svg">
+<link rel="canonical" href="https://nishkam.world/changelog.html">
+<style>
+:root{--bg:#000;--ink:#f5f5f7;--muted:#a1a1a6;--brand:#1430ff;--hi:#4a63ff;--panel:#1c1c1e;--glass:rgba(255,255,255,.06);--edge:rgba(255,255,255,.14);--ok:#30d158;--sans:"Helvetica Neue",Helvetica,Inter,Arial,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(900px 600px at 80% -10%,rgba(20,48,255,.28),transparent 70%),var(--bg);color:var(--ink);font:16px/1.5 var(--sans);overflow-x:hidden}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
+.top{display:flex;align-items:center;gap:12px;max-width:1160px;margin:0 auto;padding:16px}
+.top .logo{margin-right:auto;font-weight:600;font-size:20px;letter-spacing:-.01em;text-decoration:none}
+.pill{display:inline-flex;align-items:center;gap:8px;min-height:30px;padding:4px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--edge);color:var(--ink);font:14px var(--sans);text-decoration:none;white-space:nowrap}
+@media(max-width:699px){.nophone{display:none}.pill{min-height:44px}}
+.wrap{max-width:760px;margin:0 auto;padding:8px 16px 64px}
+.wrap h1{margin:0;font-size:32px;font-weight:600;letter-spacing:-.02em}
+.lede{margin:4px 0 24px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12);margin-bottom:16px}
+.card h2{margin:0 0 12px;font-size:12px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.card ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.card li{display:flex;gap:12px;align-items:baseline;min-width:0;overflow-wrap:anywhere}
+.card li span:last-child{min-width:0}
+.tag{flex:none;width:96px;text-align:center;font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:2px 0;border-radius:999px;border:1px solid var(--edge);background:var(--glass);color:var(--muted)}
+.tag.New{background:rgba(20,48,255,.28);border-color:var(--hi);color:#fff}
+.tag.Fixed{color:var(--ok)}
+.empty{color:var(--muted)}
+.logotype { display: inline-block; aspect-ratio: 5033 / 1855; height: 28px; background: #fff; vertical-align: middle;
+  -webkit-mask: url(brand/wordmark-latin.svg) center / contain no-repeat; mask: url(brand/wordmark-latin.svg) center / contain no-repeat; }
+</style></head>
+<body>
+<header class="top"><a class="logo" href="index.html" aria-label="Nishkam home"><span class="logotype"></span></a><a class="pill nophone" href="studio.html">Open Studio</a></header>
+<main id="main" class="wrap">
+<h1>Changelog</h1>
+<p class="lede">What's new on Nishkam.</p>
+<div id="log"></div>
+</main>
+<script>
+// One line per change. Newest day first. Tags: "New", "Improved", "Fixed".
+const ENTRIES = [
+  { date: "2026-10-17", items: [
+    ["New", "Sign in to keep your points, rank and badges."],
+    ["New", "Profile page with your handle, rank, badges and a leaderboard."],
+    ["New", "Two free AI hints per account to explain a failed check."],
+    ["New", "Studio Verify stage: a formal check and a self-checking testbench, with waveform traces."],
+    ["New", "Practice asks for the same access key as Studio."],
+    ["Improved", "Practice account menu: one sign-in control and a My profile link."],
+    ["Improved", "Landing page: a 3D layer view of the real tiny8 layout that moves as you scroll."],
+    ["Fixed", "Unused input pins no longer cross other wires in the layout."]
+  ] },
+  { date: "2026-10-15", items: [
+    ["New", "Studio Examples tab: shreg4, counter and tiny8, with Load and Undo."],
+    ["New", "Studio asks for an access key."],
+    ["New", "Click a wire in the Studio schematic to find its net in the code, and the other way round."],
+    ["New", "Worst path button highlights the worst setup-timing path in the schematic."],
+    ["Improved", "In-browser routing keeps pins apart and inside the die; LVS matches on the adder, tiny8, mult8 and two-clock test designs."],
+    ["Improved", "Studio marks results as stale after an edit."],
+    ["Fixed", "Studio post-layout timing no longer crashes on tiny8."]
+  ] },
+  { date: "2026-10-14", items: [
+    ["New", "Three clock domain crossing (CDC) practice problems, graded by rules and a worst-case timing check."],
+    ["New", "Physical design problem squeeze-tiny8: fit tiny8 in 19,000 µm² at a 24 ns clock."],
+    ["New", "Practice gives hints, and a write-up that shows after you solve a problem."],
+    ["New", "Passing RTL designs get a score for area and maximum speed."],
+    ["New", "Studio builds a clock tree in the browser."],
+    ["Improved", "Studio timing after routing uses wire delays from the layout."],
+    ["Improved", "Landing page: new hero with the real routed chip, Studio walkthrough and a tool table."],
+    ["Fixed", "Studio LVS (Netgen) crash fixed."]
+  ] },
+  { date: "2026-10-13", items: [
+    ["New", "Nishkam Studio: a browser tool for the chip flow from RTL to layout. No install."],
+    ["New", "Studio simulation, waveforms, gate schematic, and synthesis with timing, power and area reports."],
+    ["New", "Studio runs place, route, layout checks (DRC) and LVS in the browser."],
+    ["New", "Layout view in 2D and 3D."],
+    ["New", "Links to Studio from the landing page and the Practice page."],
+    ["Improved", "Studio timing comes only from OpenSTA; our own estimate is gone."],
+    ["Improved", "Layout checks use the same settings as the standard flow, so DRC errors drop."],
+    ["Fixed", "Studio did not load because of a typo in its code."]
+  ] },
+  { date: "2026-10-12", items: [
+    ["New", "Five RTL practice problems, checked in the browser against a reference design. A failing run shows a cycle table."],
+    ["New", "Landing page with the N and न logo in electric blue."]
+  ] }
+];
+
+const log = document.getElementById("log");
+for (const day of ENTRIES) {
+  const card = document.createElement("section");
+  card.className = "card";
+  const h = document.createElement("h2");
+  h.textContent = day.date;
+  const ul = document.createElement("ul");
+  for (const [tag, text] of day.items) {
+    const li = document.createElement("li");
+    const t = document.createElement("span");
+    t.className = "tag " + tag;
+    t.textContent = tag;
+    const s = document.createElement("span");
+    s.textContent = text;
+    li.append(t, s);
+    ul.append(li);
+  }
+  card.append(h, ul);
+  log.append(card);
+}
+</script>
+</body></html>
