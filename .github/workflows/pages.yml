@@ -20,8 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # stamp ?v=<sha> on module/worker URLs so a deploy never mixes old and new cached files (source stays unstamped)
+      - run: cp -r web _site && node .github/stamp.mjs _site "${GITHUB_SHA::7}"
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
