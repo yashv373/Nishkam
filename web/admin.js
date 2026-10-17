@@ -25,11 +25,19 @@ else {
         <table>${pp || NONE("No solves yet.")}</table>
         <h2>Switches</h2>${tog("ai_review", "AI explanations")}${tog("signups", "New sign-ups")}${tog("studio", "Practice and Studio")}
         <div class="row"><input type="text" id="banner" maxlength="300" placeholder="Banner text for the top of the pages (empty = none)" value="${esc(f.banner)}"><button id="saveBanner">Save banner</button></div>
+        <h2>Pitch deck</h2><div class="row"><button id="deck">Pitch deck</button></div>
         <h2>Website visits</h2><p><a href="https://dash.cloudflare.com/?to=/:account/web-analytics" target="_blank" rel="noopener">Open Cloudflare Web Analytics</a></p>
         <h2>Last 50 admin actions</h2><table>${s.log.map((l) => `<tr><td>${esc(new Date(l.at).toLocaleString())}</td><td>${esc(l.who)}</td><td>${esc(l.what)}</td></tr>`).join("") || NONE("None yet.")}</table>
         <p id="msg" class="err"></p>`);
       const set = async (key, value) => { try { await call("/admin/flags", { key, value }); show(); } catch (e) { $("msg").textContent = e.message; } };
       main.querySelectorAll("button[data-k]").forEach((b) => (b.onclick = () => set(b.dataset.k, b.dataset.v)));
+      $("deck").onclick = async () => {
+        try {
+          const r = await fetch(API + "/admin/deck", { headers: { Authorization: "Bearer " + await auth.currentUser.getIdToken() } });
+          if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Error " + r.status);
+          window.open(URL.createObjectURL(new Blob([await r.text()], { type: "text/html" })));
+        } catch (e) { $("msg").textContent = e.message; }
+      };
       $("saveBanner").onclick = () => set("banner", $("banner").value.trim());
     } catch (e) { say(`<p class="err">${esc(e.message)}</p>`); }
   }

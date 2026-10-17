@@ -100,4 +100,17 @@ assert.equal(rows.get("u1").reviews_used, 0, "no quota spent while off");
 await call("/admin/flags", { key: "signups", value: "off" }, adm);
 assert.equal((await call("/me", null, await mint({ sub: "newbie" }))).status, 403, "signups off blocks new uid");
 assert.equal((await call("/me")).status, 200, "existing uid still fine");
+// (c) private deck from a fake R2
+let deck = "<h1>deck</h1>";
+env.PRIVATE = { get: async (k) => (k === "pitch.html" && deck != null ? { text: async () => deck } : null) };
+const user = await mint({ sub: "u1" });
+assert.equal((await call("/admin/deck", null, user)).status, 403, "non-admin deck");
+const dr = await call("/admin/deck", null, adm);
+assert.equal(dr.status, 200); assert.equal(await dr.text(), deck);
+assert.match(dr.headers.get("content-type"), /text\/html/);
+assert.equal(dr.headers.get("cache-control"), "no-store");
+assert.equal(dr.headers.get("x-robots-tag"), "noindex");
+assert.match(dr.headers.get("content-security-policy"), /frame-ancestors 'none'/);
+deck = null;
+assert.equal((await call("/admin/deck", null, adm)).status, 404, "missing deck");
 console.log("backend: all tests passed");

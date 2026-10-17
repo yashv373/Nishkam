@@ -60,8 +60,8 @@ export async function handle(req, env, getKeys = fetchKeys) {
   const flagRows = async () => ({ ...DEFAULTS, ...Object.fromEntries(((await env.DB.prepare("SELECT key,value FROM flags").bind().all()).results || []).map((r) => [r.key, r.value])) });
   if (path === "/flags" && req.method === "GET")
     return new Response(JSON.stringify(await flagRows()), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", ...cors } });
-  if (!["/me", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags"].includes(path)) return json({ error: "not found" }, 404);
-  if (req.method !== (path === "/me" || path === "/admin/stats" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
+  if (!["/me", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags", "/admin/deck"].includes(path)) return json({ error: "not found" }, 404);
+  if (req.method !== (path === "/me" || path === "/admin/stats" || path === "/admin/deck" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
 
   const tok = /^Bearer (.+)$/.exec(req.headers.get("Authorization") || "")?.[1];
   let claims;
@@ -74,6 +74,11 @@ export async function handle(req, env, getKeys = fetchKeys) {
   const isAdmin = claims.email_verified === true && !!claims.email &&
     String(env.ADMIN_EMAILS || "").toLowerCase().split(",").map((e) => e.trim()).includes(claims.email.toLowerCase());
   if (path.startsWith("/admin/") && !isAdmin) return json({ error: "admins only" }, 403);
+  if (path === "/admin/deck") {
+    const o = await env.PRIVATE.get("pitch.html");
+    if (!o) return json({ error: "no deck uploaded" }, 404);
+    return new Response(await o.text(), { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; script-src 'unsafe-inline'; frame-ancestors 'none'", ...cors } });
+  }
   if (await env.DB.prepare("SELECT uid FROM users WHERE uid=?").bind(uid).first())
     await env.DB.prepare("UPDATE users SET email=?, name=?, last_seen=? WHERE uid=?").bind(claims.email || "", claims.name || "", now, uid).run();
   else {

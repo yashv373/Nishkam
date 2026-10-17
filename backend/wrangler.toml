@@ -12,3 +12,7 @@ binding = "AI"
 
 [vars]
 FIREBASE_PROJECT_ID = "REPLACE_WITH_FIREBASE_PROJECT_ID"
+
+[[r2_buckets]]
+binding = "PRIVATE"
+bucket_name = "nishkam-private"

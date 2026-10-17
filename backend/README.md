@@ -18,4 +18,5 @@ Test (no install needed): `node test.mjs`.
 6. `npx wrangler deploy`. Workers AI needs no key; it uses the `AI` binding.
 7. Admins: `npx wrangler secret put ADMIN_EMAILS`, value `yvs.373@gmail.com` (comma list; to add the other two later, run it again with all three). It is a secret, so it never goes in the repo. An admin email must be verified in Firebase.
 8. Optional visit counts: Cloudflare dashboard > Web Analytics > add site nishkam.world, copy the token into `cfBeacon` in `web/config.js`.
-9. Fill `web/config.js` with the Firebase config and the Worker URL. Until you do, the page shows nothing new.
+9. Private pitch deck (admins only, shown by a button on the admin page). The deck lives outside the repo on purpose, because the repo is public. Once: `npx wrangler r2 bucket create nishkam-private`. Upload, and re-run to update the deck: `npx wrangler r2 object put nishkam-private/pitch.html --file "C:/Users/Asus/Desktop/claude's_brain/30 Projects/Nishkam/pitch/nishkam-pitch.html" --remote`. Create the bucket before the first `wrangler deploy`.
+10. Fill `web/config.js` with the Firebase config and the Worker URL. Until you do, the page shows nothing new.
