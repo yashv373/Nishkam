@@ -5,6 +5,7 @@ const QUOTA = 2, MAX_BODY = 20 * 1024, KEEP = 2;
 const DEFAULTS = { ai_review: "on", signups: "on", studio: "on", banner: "" };
 const TOGGLES = ["ai_review", "signups", "studio"];
 const DAY = 86400000;
+const HANDLE = /^[a-z0-9_]{3,20}$/;
 const enc = new TextEncoder(), dec = new TextDecoder();
 
 const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
@@ -60,8 +61,8 @@ export async function handle(req, env, getKeys = fetchKeys) {
   const flagRows = async () => ({ ...DEFAULTS, ...Object.fromEntries(((await env.DB.prepare("SELECT key,value FROM flags").bind().all()).results || []).map((r) => [r.key, r.value])) });
   if (path === "/flags" && req.method === "GET")
     return new Response(JSON.stringify(await flagRows()), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", ...cors } });
-  if (!["/me", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags", "/admin/deck"].includes(path)) return json({ error: "not found" }, 404);
-  if (req.method !== (path === "/me" || path === "/admin/stats" || path === "/admin/deck" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
+  if (!["/me", "/me/handle", "/leaderboard", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags", "/admin/deck"].includes(path)) return json({ error: "not found" }, 404);
+  if (req.method !== (path === "/me" || path === "/leaderboard" || path === "/admin/stats" || path === "/admin/deck" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
 
   const tok = /^Bearer (.+)$/.exec(req.headers.get("Authorization") || "")?.[1];
   let claims;
@@ -79,11 +80,40 @@ export async function handle(req, env, getKeys = fetchKeys) {
     if (!o) return json({ error: "no deck uploaded" }, 404);
     return new Response(o, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:; script-src 'unsafe-inline'; frame-ancestors 'none'", ...cors } });
   }
-  if (await env.DB.prepare("SELECT uid FROM users WHERE uid=?").bind(uid).first())
+  // Default handle = email local part made safe; digits added until free.
+  const freeHandle = async () => {
+    let base = String(claims.email || "").split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 20);
+    if (base.length < 3) base = (base + "_usr").slice(0, 20);
+    for (let n = 1, h = base; ; h = base.slice(0, 20 - String(++n).length) + n)
+      if (!(await env.DB.prepare("SELECT uid FROM users WHERE handle=?").bind(h).first())) return h;
+  };
+  const known = await env.DB.prepare("SELECT uid, handle FROM users WHERE uid=?").bind(uid).first();
+  if (known) {
     await env.DB.prepare("UPDATE users SET email=?, name=?, last_seen=? WHERE uid=?").bind(claims.email || "", claims.name || "", now, uid).run();
-  else {
+    if (!known.handle) await env.DB.prepare("UPDATE users SET handle=? WHERE uid=?").bind(await freeHandle(), uid).run(); // users from before the handle column
+  } else {
     if ((await flagRows()).signups === "off") return json({ error: "New sign-ups are paused." }, 403);
-    await env.DB.prepare("INSERT INTO users (uid,email,name,created,last_seen) VALUES (?,?,?,?,?)").bind(uid, claims.email || "", claims.name || "", now, now).run();
+    await env.DB.prepare("INSERT INTO users (uid,email,name,created,last_seen,handle) VALUES (?,?,?,?,?,?)").bind(uid, claims.email || "", claims.name || "", now, now, await freeHandle()).run();
+  }
+
+  // ponytail: scans all users per call, fine to ~10k (same as /admin/stats). Rows: best first, ties by created.
+  const board = async () => ((await env.DB.prepare("SELECT uid,handle,name,created,solved FROM users").bind().all()).results || [])
+    .map((r) => ({ uid: r.uid, handle: r.handle, name: r.name, created: r.created, solved: JSON.parse(r.solved || "[]").length }))
+    .sort((a, b) => b.solved - a.solved || a.created - b.created);
+  const rankOf = (rows, pts) => 1 + rows.filter((r) => r.solved > pts).length;
+  if (path === "/leaderboard") {
+    const rows = await board();
+    return json({ total_users: rows.length, rows: rows.slice(0, 50).map((r) => ({ rank: rankOf(rows, r.solved), handle: r.handle, first_name: String(r.name || "").split(" ")[0], points: r.solved, solved: r.solved })) });
+  }
+  if (path === "/me/handle") {
+    let b; try { b = JSON.parse(await req.text()); } catch { return json({ error: "bad json" }, 400); }
+    const h = b?.handle;
+    if (typeof h !== "string" || !HANDLE.test(h)) return json({ error: "Handles are 3-20 characters: a-z, 0-9 and _." }, 400);
+    const own = await env.DB.prepare("SELECT uid FROM users WHERE handle=?").bind(h).first();
+    if (own && own.uid !== uid) return json({ error: "That handle is taken." }, 409);
+    try { await env.DB.prepare("UPDATE users SET handle=? WHERE uid=?").bind(h, uid).run(); }
+    catch { return json({ error: "That handle is taken." }, 409); } // lost a race: the unique index refused
+    return json({ ok: true, handle: h });
   }
 
   if (path === "/admin/stats") {
@@ -109,9 +139,9 @@ export async function handle(req, env, getKeys = fetchKeys) {
   }
 
   if (path === "/me") {
-    const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used FROM users WHERE uid=?").bind(uid).first();
-    const solved = JSON.parse(u.solved || "[]");
-    return json({ uid: u.uid, email: u.email, name: u.name, created: u.created, solved, points: solved.length, reviews_left: Math.max(0, QUOTA - u.reviews_used), is_admin: isAdmin });
+    const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used,handle FROM users WHERE uid=?").bind(uid).first();
+    const solved = JSON.parse(u.solved || "[]"), rows = await board();
+    return json({ uid: u.uid, email: u.email, name: u.name, handle: u.handle, created: u.created, solved, points: solved.length, rank: rankOf(rows, solved.length), total_users: rows.length, reviews_left: Math.max(0, QUOTA - u.reviews_used), is_admin: isAdmin });
   }
 
   const text = await req.text();

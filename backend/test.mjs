@@ -29,11 +29,12 @@ const rows = new Map(), flags = {}, log = [], reviews = [];
 const ok = { meta: { changes: 1 } };
 const db = { prepare: (sql) => ({ bind: (...a) => ({
   run: async () => {
-    if (sql.startsWith("INSERT INTO users")) { rows.set(a[0], { uid: a[0], email: a[1], name: a[2], created: a[3], last_seen: a[4], solved: "[]", code: "{}", reviews_used: 0 }); return ok; }
+    if (sql.startsWith("INSERT INTO users")) { rows.set(a[0], { uid: a[0], email: a[1], name: a[2], created: a[3], last_seen: a[4], handle: a[5], solved: "[]", code: "{}", reviews_used: 0 }); return ok; }
     if (sql.startsWith("UPDATE users SET email")) { Object.assign(rows.get(a[3]), { email: a[0], name: a[1], last_seen: a[2] }); return ok; }
     if (sql.includes("reviews_used+1")) { const u = rows.get(a[0]); if (u && u.reviews_used < a[1]) { u.reviews_used++; return ok; } return { meta: { changes: 0 } }; }
     if (sql.includes("reviews_used-1")) { const u = rows.get(a[0]); if (u.reviews_used > 0) u.reviews_used--; return ok; }
     if (sql.startsWith("UPDATE users SET solved")) { Object.assign(rows.get(a[2]), { solved: a[0], code: a[1] }); return ok; }
+    if (sql.startsWith("UPDATE users SET handle")) { if ([...rows.values()].some((r) => r.handle === a[0] && r.uid !== a[1])) throw new Error("UNIQUE"); rows.get(a[1]).handle = a[0]; return ok; }
     if (sql.startsWith("INSERT INTO flags")) { flags[a[0]] = a[1]; return ok; }
     if (sql.startsWith("INSERT INTO admin_log")) { log.push({ who: a[0], what: a[1], at: a[2] }); return ok; }
     if (sql.startsWith("INSERT INTO reviews")) { reviews.push(a[1]); return ok; }
@@ -42,6 +43,7 @@ const db = { prepare: (sql) => ({ bind: (...a) => ({
   first: async () => {
     if (sql.includes("COUNT(*) total, SUM(created")) { const r = [...rows.values()]; return { total: r.length, d1: r.length, d7: r.length, d30: r.length, active7: r.length }; }
     if (sql.includes("FROM reviews")) return { total: reviews.length, today: reviews.length };
+    if (sql.includes("WHERE handle=")) return [...rows.values()].find((r) => r.handle === a[0]);
     return rows.get(a[0]);
   },
   all: async () => ({ results: sql.includes("FROM flags") ? Object.entries(flags).map(([key, value]) => ({ key, value })) : sql.includes("FROM admin_log") ? log : [...rows.values()] }),
@@ -55,13 +57,30 @@ const rev = { problemId: "shreg4", problemText: "p", userRtl: "r", cycleTable: "
 
 assert.equal((await call("/me", null, "garbage")).status, 401);
 assert.equal((await call("/me", null, undefined, "https://evil.example")).status, 403);
-assert.equal((await call("/me")).status, 200);
+const me0 = await (await call("/me")).json();
+assert.equal(me0.handle, "a_usr", "default handle from email local part, padded to 3+");
+assert.equal((await (await call("/me", null, await mint({ sub: "d1", email: "A.B@x.io" }))).json()).handle, "a_b");
+assert.equal((await (await call("/me", null, await mint({ sub: "d2", email: "a.b@y.io" }))).json()).handle, "a_b2", "digit added when taken");
+assert.equal((await call("/me/handle", { handle: "Bad Name" })).status, 400);
+assert.equal((await call("/me/handle", { handle: "a_b" })).status, 409, "taken");
+assert.equal((await call("/me/handle", { handle: "al_1" })).status, 200);
+assert.equal((await call("/me/handle", { handle: "al_1" })).status, 200, "own handle is fine");
+assert.equal((await (await call("/me")).json()).handle, "al_1");
 // old solve/points path: points = distinct solves, last 2 code versions kept
 for (const v of ["a", "b", "c"]) await call("/solve", { problem: "shreg4", files: { "t.v": v } });
 await call("/solve", { problem: "adder2", files: {} });
 const me = await (await call("/me")).json();
 assert.deepEqual(me.solved, ["shreg4", "adder2"]); assert.equal(me.points, 2); assert.equal(me.is_admin, false);
 assert.deepEqual(JSON.parse(rows.get("u1").code).shreg4.map((x) => x.files["t.v"]), ["c", "b"]);
+// rank with ties: u1 has 2; d1 solves 2 (tie), d2 none
+await call("/solve", { problem: "p1" }, await mint({ sub: "d1", email: "A.B@x.io" })); await call("/solve", { problem: "p2" }, await mint({ sub: "d1", email: "A.B@x.io" }));
+const meR = await (await call("/me")).json(), meD1 = await (await call("/me", null, await mint({ sub: "d1", email: "A.B@x.io" }))).json(), meD2 = await (await call("/me", null, await mint({ sub: "d2", email: "a.b@y.io" }))).json();
+assert.deepEqual([meR.rank, meD1.rank, meD2.rank, meR.total_users], [1, 1, 3, 3], "ties share a rank");
+const lb = await (await call("/leaderboard")).json();
+assert.deepEqual(lb.rows.map((r) => [r.rank, r.points]), [[1, 2], [1, 2], [3, 0]]);
+assert.equal(lb.rows[0].handle, "al_1", "earlier created wins tie-break");
+assert.ok(!/@|email/.test(JSON.stringify(lb)), "no emails in leaderboard");
+assert.equal((await call("/leaderboard", null, "garbage")).status, 401);
 assert.equal((await call("/solve", { problem: "Bad_ID", files: {} })).status, 400);
 assert.equal((await call("/solve", { problem: "x", files: { a: "y".repeat(21 * 1024) } })).status, 413);
 
@@ -86,7 +105,7 @@ assert.equal((await call("/admin/stats", null, unver)).status, 403, "unverified 
 const adm = await mint({ sub: "adm", email: "boss@x.io", email_verified: true });
 assert.equal((await (await call("/me", null, adm)).json()).is_admin, true);
 const st = await (await call("/admin/stats", null, adm)).json();
-assert.equal(st.users, 2); assert.equal(st.solves.perProblem.shreg4, 1); assert.equal(st.reviews.total, 2);
+assert.equal(st.users, 4); assert.equal(st.solves.perProblem.shreg4, 1); assert.equal(st.reviews.total, 2);
 assert.equal((await call("/admin/flags", { key: "nope", value: "on" }, adm)).status, 400);
 assert.equal((await call("/admin/flags", { key: "ai_review", value: "off" }, adm)).status, 200);
 assert.equal((await call("/admin/flags", { key: "banner", value: "Hello" }, adm)).status, 200);
