@@ -29,11 +29,11 @@ span.pill{cursor:default;color:var(--muted)}
 .card{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12);margin-bottom:16px}
 .card h2{margin:0 0 12px;font-size:12px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .id{padding:0;overflow:hidden}.id .body{padding:0 24px 24px}
-.gh{position:relative;height:88px;overflow:hidden;background:#04061a}
+.gh{position:relative;height:96px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 35%,transparent);mask-image:linear-gradient(#000 35%,transparent)}
 .gh i{position:absolute;border-radius:50%;will-change:transform}
-.gh .l1{width:240px;height:240px;left:-40px;top:-120px;background:radial-gradient(circle,rgba(74,99,255,.85),transparent 68%);animation:drift1 26s ease-in-out infinite alternate}
-.gh .l2{width:200px;height:200px;right:-30px;top:-60px;background:radial-gradient(circle,rgba(20,48,255,.9),transparent 70%);animation:drift2 22s ease-in-out infinite alternate}
-.gh .gl{position:absolute;inset:0;background:rgba(255,255,255,.06);backdrop-filter:blur(28px) saturate(1.8);-webkit-backdrop-filter:blur(28px) saturate(1.8);border-bottom:1px solid var(--edge);box-shadow:inset 0 1px 0 rgba(255,255,255,.14)}
+.gh .l1{width:240px;height:240px;left:-40px;top:-120px;background:radial-gradient(circle,rgba(74,99,255,.25),transparent 70%);animation:drift1 26s ease-in-out infinite alternate}
+.gh .l2{width:200px;height:200px;right:-30px;top:-60px;background:radial-gradient(circle,rgba(20,48,255,.25),transparent 70%);animation:drift2 22s ease-in-out infinite alternate}
+.gh .gl{position:absolute;inset:0;background:rgba(255,255,255,.03);backdrop-filter:blur(28px) saturate(1.8);-webkit-backdrop-filter:blur(28px) saturate(1.8)}
 @keyframes drift1{to{transform:translate3d(160px,40px,0)}}
 @keyframes drift2{to{transform:translate3d(-180px,30px,0)}}
 @media(prefers-reduced-motion:reduce){.gh i{animation:none}}
@@ -43,7 +43,12 @@ span.pill{cursor:default;color:var(--muted)}
 .pickrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .crop{margin-top:16px;display:grid;gap:12px;justify-items:start}
 .crop canvas{width:192px;height:192px;border-radius:12px;touch-action:none;cursor:grab;background:#000;max-width:100%}
-.crop input[type=range]{width:192px;min-height:30px;padding:0}
+.crop input[type=range]{width:192px;min-height:30px;padding:0;background:none;border:0;-webkit-appearance:none;appearance:none}
+.crop input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--edge);border-radius:999px}
+.crop input[type=range]::-moz-range-track{height:2px;background:var(--edge);border-radius:999px}
+.crop input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-7px;border-radius:50%;border:0;background:#fff;box-shadow:0 0 12px 2px rgba(74,99,255,.7)}
+.crop input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;border:0;background:#fff;box-shadow:0 0 12px 2px rgba(74,99,255,.7)}
+.crop input[type=range]:focus-visible{outline:2px solid var(--hi);outline-offset:4px;border-radius:999px}
 .bubble{margin-bottom:8px;padding:6px 12px;border-radius:12px;background:var(--glass);border:1px solid var(--edge);font-size:14px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
 .name{margin:16px 0 0;font-size:24px;font-weight:600;letter-spacing:-.02em;overflow-wrap:anywhere}
 .hd{margin:0;color:var(--muted);overflow-wrap:anywhere}
