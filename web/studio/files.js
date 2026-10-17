@@ -105,11 +105,20 @@ export const EXAMPLES = [
 ];
 const ok = (p) => /\.(v|sv|vh|svh)$/i.test(p);
 export function createProject() {
-  let p;
+  let p, cleared = false;
   try { p = JSON.parse(localStorage.getItem(KEY)); } catch {}
+  // One-time clean-up: older versions saved shreg4 (or the 5-file seed) for every visitor. If the saved project is exactly
+  // one of those or an unmodified built-in example (same file names and contents), start empty. Edited projects are kept.
+  try { if (p?.files && !localStorage.getItem(KEY + ":seedcleared")) {
+    localStorage.setItem(KEY + ":seedcleared", "1");
+    const same = (f) => { const a = Object.keys(f), b = Object.keys(p.files); return a.length === b.length && a.every((n) => p.files[n] === f[n]); };
+    const OLD = { "shreg4.v": SHREG, "tb_shreg4.v": TB_SHREG, "tiny8.v": EXAMPLES[4].files["tiny8.v"], "counter.v": COUNTER, "tb_counter.v": TB };
+    if ([OLD, ...EXAMPLES.map((e) => e.files)].some(same)) { p = null; cleared = true; localStorage.removeItem(KEY); }
+  } } catch {}
   if (!p || !p.files) p = { name: "untitled", files: {} };   // first visit: no files; the Examples button loads one
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch {} };
   return {
+    get cleared() { return cleared; },
     get name() { return p.name; }, set name(v) { p.name = v; save(); },
     list: () => Object.keys(p.files).sort(),
     get: (n) => p.files[n],

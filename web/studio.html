@@ -64,7 +64,7 @@
         <h3>Start here</h3>
         <p>Studio takes a chip design from Verilog all the way to a layout, right in your browser. Nothing to install.</p>
         <ol>
-          <li>Open Examples (in the file bar above the editor) and press Load on one.</li>
+          <li>Open the Examples menu (in the file bar above the editor) and pick one.</li>
           <li>Press Run All. The example takes about 30 seconds. It checks the code, builds gates (Yosys, the synthesis tool), places and routes them, and checks timing (OpenSTA).</li>
           <li>Open the Layout, GDS and Timing tabs to see the result.</li>
         </ol>
@@ -122,7 +122,7 @@ addEventListener('error',function(e){if(e.message&&/export|module|import/i.test(
 <div id="gate" hidden><form class="gatecard" id="gateForm" autocomplete="off">
   <span class="pmark" role="img" aria-label="Nishkam"></span>
   <h1>Nishkam Studio is invite-only for now.</h1>
-  <p>Enter your access key.</p>
+  <p>Nishkam Studio and Problems need an access key while they are under development.</p><p>Enter your access key.</p>
   <input id="gateKey" type="text" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-label="Access key" autofocus>
   <button class="pbtn pri" type="submit">Enter</button>
   <p id="gateErr" role="alert"></p>
