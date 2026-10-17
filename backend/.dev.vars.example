@@ -1,6 +1,0 @@
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-SESSION_SECRET=change-me-to-a-long-random-string
-FRONTEND_URL=http://localhost:8000/app.html
-# Set to 1 ONLY on your own machine to test without GitHub. Never on a deployed worker.
-DEV_FAKE_LOGIN=0

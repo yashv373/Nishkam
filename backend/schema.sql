@@ -1,9 +1,10 @@
 CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  provider TEXT NOT NULL, provider_id TEXT NOT NULL,
-  name TEXT, avatar TEXT, created_at INTEGER NOT NULL,
-  UNIQUE(provider, provider_id));
-CREATE TABLE IF NOT EXISTS solves (
-  user_id INTEGER NOT NULL, problem_id TEXT NOT NULL,
-  solved_at INTEGER NOT NULL, code TEXT,
-  PRIMARY KEY (user_id, problem_id));
+  uid TEXT PRIMARY KEY,
+  email TEXT, name TEXT, created INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL DEFAULT 0,
+  solved TEXT NOT NULL DEFAULT '[]',          -- JSON list of problem ids; points = its length
+  code TEXT NOT NULL DEFAULT '{}',            -- JSON {problemId: [last 2 {at, files}]}
+  reviews_used INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS reviews (uid TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS flags (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at INTEGER);
+CREATE TABLE IF NOT EXISTS admin_log (who TEXT NOT NULL, what TEXT NOT NULL, at INTEGER NOT NULL);

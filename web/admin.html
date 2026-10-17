@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Nishkam admin</title>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<style>
+:root { --bg:#000; --panel:rgba(255,255,255,.06); --ink:#f5f5f7; --muted:#86868b; --line:rgba(255,255,255,.14); --accent:#1430ff; --accent-ink:#fff; --bad:#ff453a; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.55 "Helvetica Neue", Helvetica, Inter, system-ui, sans-serif; }
+header { display:flex; align-items:center; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); background:var(--panel); }
+header a { color:var(--ink); }
+main { max-width:900px; margin:0 auto; padding:18px; }
+h2 { font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:26px 0 8px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:22px; box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 20px 60px rgba(0,0,0,.45); -webkit-backdrop-filter:blur(28px); backdrop-filter:blur(28px); padding:12px 14px; }
+.card b { display:block; font-size:24px; } .card span { color:var(--muted); font-size:12.5px; }
+button { backdrop-filter:blur(28px); font:inherit; cursor:pointer; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--ink); padding:7px 14px; min-height:44px; }
+button.on { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
+.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+input[type=text] { flex:1; min-width:200px; font:inherit; padding:10px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--ink); }
+table { border-collapse:collapse; width:100%; } td { padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+.muted { color:var(--muted); } .err { color:var(--bad); }
+a { color:#4a63ff; }
+</style>
+</head>
+<body>
+<header><a href="app.html">&larr; Practice</a><b>Nishkam admin</b></header>
+<main id="main"><p class="muted">Loading…</p></main>
+<script type="module" src="admin.js"></script>
+</body>
+</html>
