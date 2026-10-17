@@ -19,6 +19,7 @@ you need to continue without asking the owner to explain again.
 - Owner's working style: Claude acts as CTO. Delegate code to Sonnet subagents and docs/logs to Haiku subagents.
   Push verified milestones to `main`.
 - Every new page must be linked from the landing page.
+- **UX rules: `docs/UX.md` is binding for every web change** (top-bar order, components, states to check, the done-gate incl. live console check after deploy). Put it in every frontend agent brief.
 - Test designs only validate the tool. They do not prove a design is good.
 
 ## How it works
