@@ -34,6 +34,7 @@ const db = { prepare: (sql) => ({ bind: (...a) => ({
     if (sql.includes("reviews_used+1")) { const u = rows.get(a[0]); if (u && u.reviews_used < a[1]) { u.reviews_used++; return ok; } return { meta: { changes: 0 } }; }
     if (sql.includes("reviews_used-1")) { const u = rows.get(a[0]); if (u.reviews_used > 0) u.reviews_used--; return ok; }
     if (sql.startsWith("UPDATE users SET solved")) { Object.assign(rows.get(a[2]), { solved: a[0], code: a[1] }); return ok; }
+    if (sql.startsWith("UPDATE users SET bio")) { rows.get(a[1]).bio = a[0]; return ok; }
     if (sql.startsWith("UPDATE users SET handle")) { if ([...rows.values()].some((r) => r.handle === a[0] && r.uid !== a[1])) throw new Error("UNIQUE"); rows.get(a[1]).handle = a[0]; return ok; }
     if (sql.startsWith("INSERT INTO flags")) { flags[a[0]] = a[1]; return ok; }
     if (sql.startsWith("INSERT INTO admin_log")) { log.push({ who: a[0], what: a[1], at: a[2] }); return ok; }
@@ -66,6 +67,13 @@ assert.equal((await call("/me/handle", { handle: "a_b" })).status, 409, "taken")
 assert.equal((await call("/me/handle", { handle: "al_1" })).status, 200);
 assert.equal((await call("/me/handle", { handle: "al_1" })).status, 200, "own handle is fine");
 assert.equal((await (await call("/me")).json()).handle, "al_1");
+// bio: cap 160, control chars stripped, saved, returned by /me
+assert.equal((await (await call("/me")).json()).bio, "", "empty bio by default");
+assert.equal((await call("/me/bio", { bio: "x".repeat(161) })).status, 400, "bio cap");
+assert.equal((await call("/me/bio", { bio: 5 })).status, 400);
+assert.equal((await call("/me/bio", { bio: "x".repeat(160) })).status, 200, "160 is fine");
+assert.equal((await (await call("/me/bio", { bio: "  RTL\u0000 and\nSTA \u0007 " })).json()).bio, "RTL  and STA", "control chars stripped");
+assert.equal((await (await call("/me")).json()).bio, "RTL  and STA", "bio returned by /me");
 // old solve/points path: points = distinct solves, last 2 code versions kept
 for (const v of ["a", "b", "c"]) await call("/solve", { problem: "shreg4", files: { "t.v": v } });
 await call("/solve", { problem: "adder2", files: {} });

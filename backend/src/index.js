@@ -61,7 +61,7 @@ export async function handle(req, env, getKeys = fetchKeys) {
   const flagRows = async () => ({ ...DEFAULTS, ...Object.fromEntries(((await env.DB.prepare("SELECT key,value FROM flags").bind().all()).results || []).map((r) => [r.key, r.value])) });
   if (path === "/flags" && req.method === "GET")
     return new Response(JSON.stringify(await flagRows()), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=60", ...cors } });
-  if (!["/me", "/me/handle", "/leaderboard", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags", "/admin/deck"].includes(path)) return json({ error: "not found" }, 404);
+  if (!["/me", "/me/handle", "/me/bio", "/leaderboard", "/solve", "/me/solved", "/review", "/admin/stats", "/admin/flags", "/admin/deck"].includes(path)) return json({ error: "not found" }, 404);
   if (req.method !== (path === "/me" || path === "/leaderboard" || path === "/admin/stats" || path === "/admin/deck" ? "GET" : "POST")) return json({ error: "method not allowed" }, 405);
 
   const tok = /^Bearer (.+)$/.exec(req.headers.get("Authorization") || "")?.[1];
@@ -116,6 +116,15 @@ export async function handle(req, env, getKeys = fetchKeys) {
     return json({ ok: true, handle: h });
   }
 
+  if (path === "/me/bio") {
+    let b; try { b = JSON.parse(await req.text()); } catch { return json({ error: "bad json" }, 400); }
+    if (typeof b?.bio !== "string") return json({ error: "bad bio" }, 400);
+    const bio = b.bio.replace(/[\u0000-\u001f\u007f]/g, " ").trim();
+    if ([...bio].length > 160) return json({ error: "Bio is 160 characters at most." }, 400);
+    await env.DB.prepare("UPDATE users SET bio=? WHERE uid=?").bind(bio, uid).run();
+    return json({ ok: true, bio });
+  }
+
   if (path === "/admin/stats") {
     const t = await env.DB.prepare("SELECT COUNT(*) total, SUM(created>=?) d1, SUM(created>=?) d7, SUM(created>=?) d30, SUM(last_seen>=?) active7 FROM users")
       .bind(now - (now % DAY), now - 7 * DAY, now - 30 * DAY, now - 7 * DAY).first();
@@ -139,9 +148,9 @@ export async function handle(req, env, getKeys = fetchKeys) {
   }
 
   if (path === "/me") {
-    const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used,handle FROM users WHERE uid=?").bind(uid).first();
+    const u = await env.DB.prepare("SELECT uid,email,name,created,solved,reviews_used,handle,bio FROM users WHERE uid=?").bind(uid).first();
     const solved = JSON.parse(u.solved || "[]"), rows = await board();
-    return json({ uid: u.uid, email: u.email, name: u.name, handle: u.handle, created: u.created, solved, points: solved.length, rank: rankOf(rows, solved.length), total_users: rows.length, reviews_left: Math.max(0, QUOTA - u.reviews_used), is_admin: isAdmin });
+    return json({ uid: u.uid, email: u.email, name: u.name, handle: u.handle, bio: u.bio || "", created: u.created, solved, points: solved.length, rank: rankOf(rows, solved.length), total_users: rows.length, reviews_left: Math.max(0, QUOTA - u.reviews_used), is_admin: isAdmin });
   }
 
   const text = await req.text();
